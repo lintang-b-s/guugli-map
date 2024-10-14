@@ -35,8 +35,8 @@ def euclidean_distance(p1, p2):
 
 
 distance_matrix = {}
-for i in range(0, num_customers):
-    for j in range(0, num_customers):
+for i in range(0, num_customers_with_depot):
+    for j in range(0, num_customers_with_depot):
      
         left, right = df_customers.loc[i], df_customers.loc[j]
 
@@ -63,31 +63,34 @@ route_radius =  (max_dist - min_dist)/2
 def allowed_neigbors_search(customer_size, customers, distance_matrix, available_customers, 
                      fleet_total_time, fllet_capacity, curr_time, curr_capacity,
                      curr_customer):
-    allowed_neigbors = [] # -> 0, 1, 2, ... , 24 (customer)
+    # customers -> [0, 1, 2, ... 24]
+    allowed_neigbors = [None] * len(available_customers) # -> 0, 1, 2, ... , 24 (customer)
     # available_customers -> 1, 2, 3, ..., 25
+
     available_customers_index = [i-1 for i in available_customers]
-    for i in range(len(customers)):
-        customer = customers[i]
-        allowed_neigbors.append({'id': customer['id'], 'demand': customer['demand'],  
+    for i in range(len(available_customers_index)):
+        cust_index = available_customers_index[i]
+        customer = customers[cust_index]
+        allowed_neigbors[i] = {'id': customer['id'], 'demand': customer['demand'],  
                       'service_time': customer['service_time'] ,
                       'ready_time': customer['ready_time'],
                       'due_time': customer['due_time'],
-                       'complete_time': customer['complete_time'] ,})
+                       'complete_time': customer['complete_time'] ,}
 
         allowed_neigbors[i]['demand'] += curr_capacity
 
-        allowed_neigbors[i]['distance_to_other'] = distance_matrix[curr_customer][i+1]
+        allowed_neigbors[i]['distance_to_curr_customer'] = distance_matrix[curr_customer][cust_index+1]
 
-        allowed_neigbors[i]['arrival_time'] = allowed_neigbors[i]['distance_to_other'] + curr_time
+        allowed_neigbors[i]['arrival_time'] = allowed_neigbors[i]['distance_to_curr_customer'] + curr_time
 
         allowed_neigbors[i]['waiting_time'] = allowed_neigbors[i]['ready_time'] -  allowed_neigbors[i]['arrival_time']
-        allowed_neigbors[i]['waiting_time'] = max(0,  allowed_neigbors[i]['arrival_time'])
+        allowed_neigbors[i]['waiting_time'] = max(0,  allowed_neigbors[i]['waiting_time'])
 
-        allowed_neigbors[i]['start_time'] = allowed_neigbors[i]['arrival_time'] + allowed_neigbors[i]['waiting_time']
+        allowed_neigbors[i]['start_time'] = allowed_neigbors[i]['arrival_time'] + allowed_neigbors[i]['waiting_time']  
 
         allowed_neigbors[i]['finish_time'] = allowed_neigbors[i]['start_time'] + allowed_neigbors[i]['service_time']
 
-        allowed_neigbors[i]['return_time'] = distance_matrix[i+1][0] + allowed_neigbors[i]['finish_time']
+        allowed_neigbors[i]['return_time'] = distance_matrix[cust_index+1][0] + allowed_neigbors[i]['finish_time']
 
     
 
@@ -125,7 +128,7 @@ def create_random_chromosome(customers_size, customers, distance_matrix, fleet_c
             curr_customer_idx = allowed_neighbors_id.index(curr_customer)
 
             curr_route.append(curr_customer)
-            curr_distance += allowed_neighbors[curr_customer_idx]['distance_to_other']
+            curr_distance += allowed_neighbors[curr_customer_idx]['distance_to_curr_customer']
             curr_capacity = allowed_neighbors[curr_customer_idx]['demand']
             curr_time = allowed_neighbors[curr_customer_idx]['finish_time']
             available_customers.remove(curr_customer)
@@ -142,14 +145,14 @@ def create_random_chromosome(customers_size, customers, distance_matrix, fleet_c
             curr_customer = 0
             curr_distance = 0
         
-        curr_route.append(0)
-        chromosome_routes.append(curr_route)
-        curr_distance += distance_matrix[curr_customer][0]
-        chromosome_distances.append(curr_distance)
+    curr_route.append(0)
+    chromosome_routes.append(curr_route)
+    curr_distance += distance_matrix[curr_customer][0]
+    chromosome_distances.append(curr_distance)
 
-        total_distance = sum(chromosome_distances)
+    total_distance = sum(chromosome_distances)
 
-        return chromosome_routes, chromosome_distances, len(chromosome_routes), total_distance
+    return chromosome_routes, chromosome_distances, len(chromosome_routes), total_distance
 
 
 def create_greedy_chromosome(customers_size, customers, distance_matrix, fleet_capacity, 
@@ -186,11 +189,11 @@ def create_greedy_chromosome(customers_size, customers, distance_matrix, fleet_c
            
 
             curr_route.append(curr_customer) # add ci to l
-            curr_distance += allowed_neighbors[curr_customer_idx]['distance_to_other']
+            curr_distance += allowed_neighbors[curr_customer_idx]['distance_to_curr_customer']
             curr_capacity = allowed_neighbors[curr_customer_idx]['demand']
             curr_time = allowed_neighbors[curr_customer_idx]['finish_time']
             available_customers.remove(curr_customer)# remove ci
-            min_distance = -1
+            min_distance = 999999999
 
 
             allowed_neighbors = allowed_neigbors_search(customers_size, customers, distance_matrix, available_customers, 
@@ -204,24 +207,26 @@ def create_greedy_chromosome(customers_size, customers, distance_matrix, fleet_c
 
             nearest_customer = None
             nearest_customer_idx = None
-            for index in allowed_neighbors: # 0, 1, 2, 3, 4, ..., 25
-                i = allowed_neighbors[index]['id']
-                if allowed_neighbors[i]['distance_to_other'] < min_distance:
-                    min_distance = allowed_neighbors[i]['distance_to_other']
-                    nearest_customer = allowed_neighbors[i]['id']
-                    nearest_customer_idx =  allowed_neighbors_id.index(curr_customer)
+            for index in range(len(allowed_neighbors)): # 0, 1, 2, 3, 4, ..., 25
+                if allowed_neighbors[index]['distance_to_curr_customer'] < min_distance:
+                    min_distance = allowed_neighbors[index]['distance_to_curr_customer']
+                    nearest_customer = allowed_neighbors[index]['id']
+                    nearest_customer_idx =   index
 
 
             exist = False
-            for route in chromosome_routes:
-                if nearest_customer in route:
-                    exist = True
+            if nearest_customer is not None:
+                for route in chromosome_routes:
+                    if nearest_customer in route:
+                        exist = True
+            else:
+                exist = True
 
             if exist == False:
                 curr_customer = nearest_customer
                 curr_customer_idx = nearest_customer_idx
                 curr_route.append(curr_customer)
-                curr_distance += allowed_neighbors[curr_customer_idx]['distance_to_other']
+                curr_distance += allowed_neighbors[curr_customer_idx]['distance_to_curr_customer']
                 curr_capacity = allowed_neighbors[curr_customer_idx]['demand']
                 curr_time = allowed_neighbors[curr_customer_idx]['finish_time']
                 available_customers.remove(curr_customer)
@@ -236,23 +241,27 @@ def create_greedy_chromosome(customers_size, customers, distance_matrix, fleet_c
 
             nearest_customer = None
             nearest_customer_idx = None
-            for index in allowed_neighbors: # 0, 1, 2, 3, 4, ..., 25
-                i = allowed_neighbors[index]['id']
-                if allowed_neighbors[i]['distance_to_other'] < min_distance:
-                    min_distance = allowed_neighbors[i]['distance_to_other']
-                    nearest_customer = allowed_neighbors[i]['id']
-                    nearest_customer_idx = i
+            min_distance = 999999999
+
+            for index in range(len(allowed_neighbors)):# 0, 1, 2, 3, 4, ..., 25
+                if allowed_neighbors[index]['distance_to_curr_customer'] < min_distance:
+                    min_distance = allowed_neighbors[index]['distance_to_curr_customer']
+                    nearest_customer = allowed_neighbors[index]['id']
+                    nearest_customer_idx = index
             
             exist = False
-            for route in chromosome_routes:
-                if nearest_customer in route:
-                    exist = True
+            if nearest_customer is not None:
+                for route in chromosome_routes:
+                    if nearest_customer in route:
+                        exist = True
+            else:
+                exist = True
 
             if exist == False:
                 curr_customer = nearest_customer
                 curr_customer_idx = nearest_customer_idx
                 curr_route.append(curr_customer)
-                curr_distance += allowed_neighbors[curr_customer_idx]['distance_to_other']
+                curr_distance += allowed_neighbors[curr_customer_idx]['distance_to_curr_customer']
                 curr_capacity = allowed_neighbors[curr_customer_idx]['demand']
                 curr_time = allowed_neighbors[curr_customer_idx]['finish_time']
                 available_customers.remove(curr_customer)
@@ -275,14 +284,14 @@ def create_greedy_chromosome(customers_size, customers, distance_matrix, fleet_c
             curr_customer = 0
             curr_distance = 0
         
-        curr_route.append(0)
-        chromosome_routes.append(curr_route)
-        curr_distance += distance_matrix[curr_customer][0]
-        chromosome_distances.append(curr_distance)
+    curr_route.append(0)
+    chromosome_routes.append(curr_route)
+    curr_distance += distance_matrix[curr_customer][0]
+    chromosome_distances.append(curr_distance)
 
-        total_distance = sum(chromosome_distances)
+    total_distance = sum(chromosome_distances)
 
-        return chromosome_routes, chromosome_distances, len(chromosome_routes), total_distance
+    return chromosome_routes, chromosome_distances, len(chromosome_routes), total_distance
 
 
 
@@ -292,32 +301,41 @@ def initial_population(population_size, random_chromosome_num,  greedy_chromosom
     lock = threading.Lock()
    
     results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        futures = []
-        for i in range(random_chromosome_num):
-            lock.acquire()
-            futures.append(executor.submit(create_random_chromosome, customers_size, customers, distance_matrix, fleet_capacity, fleet_total_time, customers_index, ))
-            lock.release()
-        for j in range(greedy_chromosome_num):
-            lock.acquire()
-            futures.append(executor.submit(create_greedy_chromosome, customers_size, customers, distance_matrix, fleet_capacity, fleet_total_time, customers_index, route_radius, ))
-            lock.release()
-
-    for future in futures:
-        with lock:
-            results.append(future.result())
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    #     futures = []
+    #     for i in range(random_chromosome_num):
+    #         futures.append(executor.submit(create_random_chromosome, customers_size, customers, distance_matrix, fleet_capacity, fleet_total_time, customers_index, ))
+    #     for j in range(greedy_chromosome_num):
+    #         futures.append(executor.submit(create_greedy_chromosome, customers_size, customers, distance_matrix, fleet_capacity, fleet_total_time, customers_index, route_radius, ))
+         
+    # for future in futures:
+    #     with lock:
+    #         results.append(future.result())
     
-    population_routes = [-1 * population_size]
-    population_distances = [-1 * population_size]
-    population_num_routes =  [-1 * population_size]
-    population_distances_sum = [-1 * population_size]
+    for i in range(random_chromosome_num):
+            results.append(create_random_chromosome( customers_size, customers, distance_matrix, fleet_capacity, fleet_total_time, customers_index, ))
+    for j in range(greedy_chromosome_num):
+            results.append(create_greedy_chromosome( customers_size, customers, distance_matrix, fleet_capacity, fleet_total_time, customers_index, route_radius, ))
+         
+
+    population_routes = [None] * population_size
+    population_distances = [None] * population_size
+    population_num_routes =  [None] * population_size
+    population_distances_sum = [None]* population_size
 
     
-    population_routes[0::] = results[0::4]
-    population_distances[0::] = results[1::4]
-    population_num_routes[0::] = results[2::4]
-    population_distances_sum[0::] = results[3::4]
+    # population_routes[0::] = results[0::4]
+    # population_distances[0::] = results[1::4]
+    # population_num_routes[0::] = results[2::4]
+    # population_distances_sum[0::] = results[3::4]
 
+    for i in range(len(results)):
+        res = results[i]
+        population_routes[i] = res[0]
+        population_distances[i] = res[1]
+        population_num_routes[i] = res[2] 
+        population_distances_sum[i] = res[3]
+        
     return population_routes, population_distances, population_num_routes, population_distances_sum
 
 customers = []
@@ -333,14 +351,14 @@ for i in range(1, num_customers_with_depot):
 
     customers_index = list(range(1, num_customers_with_depot))
 
-    for generation in range(generations):
-        population_route_file = os.path.join("./solomon_benchmark/R1/generations/R101_population_route_" + str(generation) + ".csv")
-        population_distance_matrix_file = os.path.join("./solomon_benchmark/R1/generations/R101_population_distance_matrix_" + str(generation) + ".csv")
-        population_results_file = os.path.join("./solomon_benchmark/R1/generations/R101_population_results_" + str(generation) + ".csv")
+for generation in range(generations):
+    population_route_file = os.path.join("./solomon_benchmark/R1/generations/R101_population_route_" + str(generation) + ".csv")
+    population_distance_matrix_file = os.path.join("./solomon_benchmark/R1/generations/R101_population_distance_matrix_" + str(generation) + ".csv")
+    population_results_file = os.path.join("./solomon_benchmark/R1/generations/R101_population_results_" + str(generation) + ".csv")
 
-        population_routes, population_distances, population_num_routes, population_distances_sum = initial_population(population_size, random_chromosome_num,    greedy_chromosome_num, len(customers_index), customers, distance_matrix,
-                                                                                               fleet_capacity, fleet_total_time,   customers_index,  route_radius
-                                                                                               )
-        print("")
-    
+    population_routes, population_distances, population_num_routes, population_distances_sum = initial_population(population_size, random_chromosome_num,    greedy_chromosome_num, len(customers_index), customers, distance_matrix,
+                                                                                            fleet_capacity, fleet_total_time,   customers_index,  route_radius
+                                                                                            )
+    print("")
+
 
