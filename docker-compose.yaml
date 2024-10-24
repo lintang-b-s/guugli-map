@@ -1,0 +1,63 @@
+version: "3"
+services:
+  navigatorx:
+    container_name: navigatorx
+    build:
+      context: ./navigatorx
+      dockerfile: Dockerfile
+      args:
+        MAP_FILE: solo_jogja
+        DRIVE_FILE_ID: 1pEHN8wwUbB5XpuYMZm141fXQ_ZsIf4CO
+    mem_limit: 2000mb
+    cpus: 5
+    ports:
+      - "5000:5000"
+      
+  prometheus:
+    image: prom/prometheus:v2.40.0
+    volumes:
+      - ./navigatorx/deploy/prometheus/:/etc/prometheus/
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - 9090:9090
+    restart: always
+    depends_on:
+      - cadvisor
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+  
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    ports:
+      - 8080:8080
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    labels:
+      - prometheus-job=cadvisor
+    privileged: true
+
+
+
+
+
+volumes:
+  grafana-storage:
+  prometheus_data:
