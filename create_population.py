@@ -312,11 +312,6 @@ def initial_population(population_size, random_chromosome_num,  greedy_chromosom
         with lock:
             results.append(future.result())
     
-    # for i in range(random_chromosome_num):
-    #         results.append(create_random_chromosome( customers_size, customers, distance_matrix, fleet_capacity, fleet_total_time, customers_index, ))
-    # for j in range(greedy_chromosome_num):
-    #         results.append(create_greedy_chromosome( customers_size, customers, distance_matrix, fleet_capacity, fleet_total_time, customers_index, route_radius, ))
-         
 
     population_routes = [None] * population_size
     population_distances = [None] * population_size
@@ -373,6 +368,11 @@ def is_route_valid(route, distance_matrix, customers, fleet_total_time, fleet_ca
     return route_valid, curr_time_dist
 
 
+def fitness_function_weighted_sum(chromosome_distances, chromosome_routes ):
+    total_distance = sum(chromosome_distances)
+    num_vehicles = len(chromosome_routes)
+    fitness = (alpha*num_vehicles) + (beta*total_distance) #  fitness untuk chromosome saat ini
+    return fitness
 
 def phase_two(alpha, beta, chromosome_routes, chromosome_distances, distance_matrix, customers, fleet_total_time, fleet_capacity):
     """
@@ -414,10 +414,59 @@ def phase_two(alpha, beta, chromosome_routes, chromosome_distances, distance_mat
 
     total_distance = sum(chromosome_distances)
     num_vehicles = len(chromosome_routes)
-    fitness = (alpha*num_vehicles) + (beta*total_distance) #  fitness untuk chromosome saat ini
+    fitness = fitness_function_weighted_sum(chromosome_distances, chromosome_routes)
     return chromosome_routes, chromosome_distances, num_vehicles, total_distance, fitness
 
         
+
+def fast_non_dominated_sort_fitness(values1, values2):
+    S = [[] for _ in range(len(values1))]
+    front = [[]]
+    n = [0 for _ in range(len(values1))]
+    rank = [0 for _ in range(len(values1))]
+
+    for p in range(len(values1)):
+        S[p] = [] # S[p] isinya semua solusi yang didominasi/lebih buruk oleh solusi p 
+        n[p] = 0 # jumllah solusi lain yang mendominasi / lebih baik dari solusi p 
+        for q in range(len(values1)):
+            if (values1[p] < values1[q] and values2[p] < values2[q]) or \
+               (values1[p] <= values1[q] and values2[p] < values2[q]) or \
+               (values1[p] < values1[q] and values2[p] <= values2[q]):
+                S[p].append(q) # p dominates q
+            elif (values1[q] < values1[p] and values2[q] < values2[p]) or \
+                 (values1[q] <= values1[p] and values2[q] < values2[p]) or \
+                 (values1[q] < values1[p] and values2[q] <= values2[p]):
+                n[p] += 1 #  ada solusi lain yang mendominasi solusi p, solusi lain yang mendominasi p ada n[p] buah
+        if n[p] == 0:
+            rank[p] = 0
+            if p not in front[0]:
+                front[0].append(p)
+
+    i = 0
+    while front[i]:
+        Q = []
+        for p in front[i]:
+            for q in S[p]:
+                # q  lebih buruk dari p
+                n[q] -= 1 # n[q] solusi yang lebih baik dari q 
+                if n[q] == 0:
+                    rank[q] = i + 1
+                    if q not in Q:
+                        Q.append(q)
+        i += 1
+        front.append(Q)
+    del front[-1]
+
+    rank = [0] * len(values1)
+    for i in range(0, len(front)):
+        for j in range(0, len(front[i])):
+            rank[front[i][j]] = i + 1
+
+    return rank
+    # return front
+
+
+
 
 def routing_phase_two(population_size, alpha, beta, population_routes, population_distances, distance_matrix, customers,
                       fleet_total_time, fleet_capacity):
@@ -486,3 +535,10 @@ for experiment in range(experiments):
     print("membuat populasi experiment ke-", experiment)
 
 
+
+
+    # for i in range(random_chromosome_num):
+    #         results.append(create_random_chromosome( customers_size, customers, distance_matrix, fleet_capacity, fleet_total_time, customers_index, ))
+    # for j in range(greedy_chromosome_num):
+    #         results.append(create_greedy_chromosome( customers_size, customers, distance_matrix, fleet_capacity, fleet_total_time, customers_index, route_radius, ))
+         

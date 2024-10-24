@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" integrity="sha384-B0vP5xmATw1+K9KRQjQERJvTumQW0nPEzvF6L/Z6nronJ3oUOFUFpCjEUQouq2+l" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>
+
+    <title>Home Page</title>
+
+    <style>
+        .main-container {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+        }
+        
+        .map-container {
+            flex: 2;
+            padding: 20px;
+        }
+        
+        .form-container {
+            flex: 1;
+            padding: 20px;
+            border-left: 1px solid #ccc;
+            background-color: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: stretch;
+            overflow-y: auto;
+        }
+        
+        .form-container form {
+            width: 100%;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-container h4 {
+            margin-top: 20px;
+            margin-bottom: 15px;
+        }
+        
+        form {
+            margin-top: 20px;
+        }
+        
+        #map {
+            height: 80%;
+        }
+    </style>
+</head>
+
+<body>
+    <!--Navbar-->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <a class="navbar-brand" href="#">Sigma Club</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item active">
+                    <a class="nav-link" href="{% url 'index' %}">Map <span class="sr-only">(current)</span></a>
+                </li>
+
+            </ul>
+        </div>
+    </nav>
+
+    <!--End Navbar-->
+    <!--Main content-->
+    <div class="main-container">
+        <!-- Map container -->
+        <div class="map-container">
+            <!-- {{ m|safe }} -->
+            <div id="map"></div>
+        </div>
+
+
+        <!-- Form container -->
+        <div class="form-container">
+
+            <form method="POST" action="" id="shortest-path-form">
+                <h3>Shortest Path</h3>
+                <!-- Shortest Path Form -->
+
+                <div class="form-group">
+                    <label for="source_lat_lng">Source: </label>
+                    <div>
+                        <input type="text" id="source_lat_lng" name="source_lat_lng" class="form-control" placeholder="Source Latitude, Longitude" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="destination_lat_lng">Destination: </label>
+                    <div>
+                        <input type="text" id="destination_lat_lng" name="destination_lat_lng" class="form-control" placeholder="Destination Latitude, Longitude" required>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary my-2 my-sm-0" type="submit">Shortest Path</button>
+            </form>
+            <p style="margin-top: 10px; font-size: 20px">what's your eta?: <span id="eta"></span> menit</p>
+
+
+            <form method="POST">
+                <h3>Vehicle Routing Problem With Time Windows</h3>
+                {% csrf_token %}
+
+                <div class="form-group" style="margin-top: 20px">
+                    <label for="number_of_customers">Enter the number of customers:</label>
+                    <input type="number" id="number_of_customers" class="form-control" min="1" placeholder="Enter the number of VRPTW customers" required>
+                </div>
+                <button type="button" class="btn btn-primary mb-3" id="set-customers-btn">Set Customers</button>
+
+                <!-- Depot Form -->
+                <h4>Depot</h4>
+                <div class="form-group">
+                    <label for="depot_name">Depot Name:</label>
+                    <input type="text" name="depot_name" class="form-control" placeholder="Depot Name" required>
+                </div>
+
+                <!-- Depot Latitude and Longitude Side by Side -->
+                <div class="form-group ">
+                    <div>
+                        <label for="depot_lat_lng">Latitude, Longitude:</label>
+                        <input type="text" name="depot_lat_lng" class="form-control" placeholder="Depot Latitude, Longitude" required>
+                    </div>
+                </div>
+
+                <!-- Customer Forms -->
+                <h4>Customers</h4>
+                <div id="customer-forms">
+
+                </div>
+
+
+                <!-- Submit Button -->
+                <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Search</button>
+            </form>
+        </div>
+    </div>
+    <!--End Main content-->
+
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-Piv4xVNRyMGpqkS2by6br4gNJ7DXjqk09RmUpJ8jgGtD7zP9yug3goQfGII0yAns" crossorigin="anonymous"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mapbox/polyline@1.2.1/src/polyline.min.js"></script>
+
+    <script>
+        var map = L.map("map").setView([-7.767185059226205, 110.37619471539949], 14)
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(map);
+        document.getElementById('set-customers-btn').addEventListener('click', function() {
+
+            var numberOfCustomers = document.getElementById('number_of_customers').value;
+
+
+            var customerFormsContainer = document.getElementById('customer-forms');
+
+
+            customerFormsContainer.innerHTML = '';
+
+
+            for (var i = 0; i < numberOfCustomers; i++) {
+
+                var customerFormDiv = document.createElement('div');
+                customerFormDiv.classList.add('form-group');
+
+
+                var customerNameLabel = document.createElement('label');
+                customerNameLabel.innerText = `Customer ${i + 1} Name:`;
+                var customerNameInput = document.createElement('input');
+                customerNameInput.type = 'text';
+                customerNameInput.name = `customer_${i}_name`;
+                customerNameInput.classList.add('form-control');
+                customerNameInput.placeholder = `Customer ${i + 1} Name`;
+                customerNameInput.required = true;
+                customerNameInput.style.marginBottom = '5px';
+
+
+                var latLongWrapper = document.createElement('div');
+
+
+                var latlngInput = document.createElement('input');
+                latlngInput.type = 'text';
+                latlngInput.name = `customer_${i}_lat_lng`;
+                latlngInput.classList.add('form-control');
+                latlngInput.placeholder = `Customer ${i + 1} Latitude, Longitude`;
+                latlngInput.required = true;
+
+                latLongWrapper.appendChild(latlngInput);
+
+
+                customerFormDiv.appendChild(customerNameLabel);
+                customerFormDiv.appendChild(customerNameInput);
+                customerFormDiv.appendChild(latLongWrapper);
+
+
+                customerFormsContainer.appendChild(customerFormDiv);
+            }
+        });
+
+        // Shortest Path
+        var polylineLayer;
+
+        document.getElementById('shortest-path-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            var sourceLatLng = document.getElementById('source_lat_lng').value;
+            var destinationLatLng = document.getElementById('destination_lat_lng').value;
+            var src_lat = parseFloat(sourceLatLng.split(',')[0].replace(/ /g, ''));
+            var src_lon = parseFloat(sourceLatLng.split(',')[1].replace(/ /g, ''));
+            var dst_lat = parseFloat(destinationLatLng.split(',')[0].replace(/ /g, ''));
+            var dst_lon = parseFloat(destinationLatLng.split(',')[1].replace(/ /g, ''));
+
+            var requestBody = {
+                src_lat: src_lat,
+                src_lon: src_lon,
+                dst_lat: dst_lat,
+                dst_lon: dst_lon
+
+            };
+
+
+
+            $.ajax({
+                url: 'http://localhost:5000/api/navigations/shortest-path',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(requestBody),
+                success: function(response) {
+                    var polylineString = response.path;
+                    var eta = response.ETA;
+                    var polylineCoordinates = polyline.decode(polylineString);
+
+
+
+                    if (polylineLayer) {
+                        map.removeLayer(polylineLayer);
+                    }
+
+
+                    polylineLayer = L.polyline(polylineCoordinates, {
+                        color: 'blue'
+                    }).addTo(map);
+
+
+                    map.fitBounds(polylineLayer.getBounds());
+
+
+                    document.getElementById('eta').innerText = eta;
+
+                    if (currentMarker) {
+                        map.removeLayer(currentMarker);
+                    }
+
+                    sourceMarker = L.marker([src_lat, src_lon]).addTo(map);
+                    destinationMarker = L.marker([dst_lat, dst_lon]).addTo(map);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error fetching the shortest path:', error);
+                }
+            });
+        });
+
+        var sourceMarker = null;
+        var destinationMarker = null;
+
+        var currentMarker = null;
+
+        function onMapClick(e) {
+            if (polylineLayer) {
+                map.removeLayer(polylineLayer);
+            }
+
+            if (sourceMarker) {
+                map.removeLayer(sourceMarker);
+                map.removeLayer(destinationMarker);
+            }
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+            }
+            var latlng = e.latlng;
+
+            currentMarker = L.marker([latlng.lat, latlng.lng]).addTo(map);
+
+            currentMarker.bindPopup("Coordinates: " + latlng.lat + ", " + latlng.lng).openPopup();
+        }
+
+        map.on('click', onMapClick);
+    </script>
+</body>
+
+</html>

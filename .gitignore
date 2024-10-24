@@ -1,1 +1,4 @@
 solomon_benchmark/R1/experiments/
+
+leaflet-vrptw/*.sqlite3
+leaflet-vrptw/mysite/__pycache__/
