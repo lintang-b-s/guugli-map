@@ -23,5 +23,5 @@ from . import views as map_views
 urlpatterns = [
     path('admin/', admin.site.urls),
     # path('', TemplateView.as_view(template_name='index.html'), name="home"),
-     path('', map_views.index, name='index'),
+     path('home/', map_views.home, name='home'),
 ]

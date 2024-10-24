@@ -57,6 +57,11 @@
         #map {
             height: 80%;
         }
+        
+        .depot-time {
+            display: flex;
+            justify-content: space-between;
+        }
     </style>
 </head>
 
@@ -71,7 +76,7 @@
         <div class="collapse navbar-collapse" id="navbarSupportedContent">
             <ul class="navbar-nav mr-auto">
                 <li class="nav-item active">
-                    <a class="nav-link" href="{% url 'index' %}">Map <span class="sr-only">(current)</span></a>
+                    <a class="nav-link" href="{% url 'home' %}">Map <span class="sr-only">(current)</span></a>
                 </li>
 
             </ul>
@@ -83,7 +88,6 @@
     <div class="main-container">
         <!-- Map container -->
         <div class="map-container">
-            <!-- {{ m|safe }} -->
             <div id="map"></div>
         </div>
 
@@ -91,7 +95,7 @@
         <!-- Form container -->
         <div class="form-container">
 
-            <form method="POST" action="" id="shortest-path-form">
+            <form method="POST" action="#" id="shortest-path-form">
                 <h3>Shortest Path</h3>
                 <!-- Shortest Path Form -->
 
@@ -114,13 +118,13 @@
             <p style="margin-top: 10px; font-size: 20px">what's your eta?: <span id="eta"></span> menit</p>
 
 
-            <form method="POST">
+            <form method="POST" id="vptw-form" action="{% url 'home' %}" id="vrptw">
                 <h3>Vehicle Routing Problem With Time Windows</h3>
                 {% csrf_token %}
 
                 <div class="form-group" style="margin-top: 20px">
                     <label for="number_of_customers">Enter the number of customers:</label>
-                    <input type="number" id="number_of_customers" class="form-control" min="1" placeholder="Enter the number of VRPTW customers" required>
+                    <input type="number" id="number_of_customers" name="number_of_customers" class="form-control" min="1" placeholder="Enter the number of VRPTW customers" required>
                 </div>
                 <button type="button" class="btn btn-primary mb-3" id="set-customers-btn">Set Customers</button>
 
@@ -128,15 +132,28 @@
                 <h4>Depot</h4>
                 <div class="form-group">
                     <label for="depot_name">Depot Name:</label>
-                    <input type="text" name="depot_name" class="form-control" placeholder="Depot Name" required>
+                    <input type="text" id="depot_name" name="depot_name" class="form-control" placeholder="Depot Name" required>
                 </div>
 
                 <!-- Depot Latitude and Longitude Side by Side -->
                 <div class="form-group ">
                     <div>
                         <label for="depot_lat_lng">Latitude, Longitude:</label>
-                        <input type="text" name="depot_lat_lng" class="form-control" placeholder="Depot Latitude, Longitude" required>
+                        <input type="text" id="depot_lat_lng" name="depot_lat_lng" class="form-control" placeholder="Depot Latitude, Longitude" required>
                     </div>
+                </div>
+
+                <div class="form-group">
+                    <p>Depot Ready Time and Due Time</p>
+                    <div class="depot-time">
+                        <input type="datetime-local" id="depot_ready_time" name="depot_ready_time" class="form-control" required>
+                        <input type="datetime-local" id="depot_due_time" name="depot_due_time" class="form-control" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="depot_capacity">Vehicle Capacity:</label>
+                    <input type="number" id="depot_capacity" name="depot_capacity" class="form-control" placeholder="Vehicle Capacity" required>
                 </div>
 
                 <!-- Customer Forms -->
@@ -147,7 +164,7 @@
 
 
                 <!-- Submit Button -->
-                <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Search</button>
+                <button class="btn btn-primary my-2 my-sm-0" type="submit">Solve VRPTW</button>
             </form>
         </div>
     </div>
@@ -183,7 +200,7 @@
 
 
                 var customerNameLabel = document.createElement('label');
-                customerNameLabel.innerText = `Customer ${i + 1} Name:`;
+                customerNameLabel.innerText = `Customer ${i + 1}:`;
                 var customerNameInput = document.createElement('input');
                 customerNameInput.type = 'text';
                 customerNameInput.name = `customer_${i}_name`;
@@ -193,7 +210,6 @@
                 customerNameInput.style.marginBottom = '5px';
 
 
-                var latLongWrapper = document.createElement('div');
 
 
                 var latlngInput = document.createElement('input');
@@ -203,13 +219,84 @@
                 latlngInput.placeholder = `Customer ${i + 1} Latitude, Longitude`;
                 latlngInput.required = true;
 
-                latLongWrapper.appendChild(latlngInput);
 
+                var titleTimeWrapper = document.createElement('div');
+                titleTimeWrapper.innerText = `Customer ${i + 1} Ready Time and Due Time:`;
+                titleTimeWrapper.style.marginTop = '8px';
+
+
+                var timeWrapper = document.createElement('div');
+
+                timeWrapper.style.display = 'flex';
+                timeWrapper.style.justifyContent = 'space-between';
+                timeWrapper.style.marginBottom = '8px';
+                timeWrapper.style.marginTop = '5px';
+
+                var readyTimeLabel = document.createElement('label');
+                readyTimeLabel.innerText = `Customer ${i + 1} Ready Time:`;
+                var readyTimeInput = document.createElement('input');
+                readyTimeInput.type = 'datetime-local';
+                readyTimeInput.name = `customer_${i}_ready_time`;
+                readyTimeInput.placeholder = `Customer ${i + 1} Ready Time`;
+                readyTimeInput.classList.add('form-control');
+                readyTimeInput.style.flex = '1';
+                readyTimeInput.required = true;
+
+
+                var dueTimeLabel = document.createElement('label');
+                dueTimeLabel.innerText = `Customer ${i + 1} Due Time:`;
+                var dueTimeInput = document.createElement('input');
+                dueTimeInput.type = 'datetime-local';
+                dueTimeInput.name = `customer_${i}_due_time`;
+                dueTimeInput.placeholder = `Customer ${i + 1} Due Time`;
+                dueTimeInput.classList.add('form-control');
+                dueTimeInput.style.flex = '1';
+                dueTimeInput.required = true;
+
+
+
+                var demandWrapper = document.createElement('div');
+
+                demandWrapper.style.display = 'flex';
+                demandWrapper.style.justifyContent = 'space-between';
+                demandWrapper.style.marginBottom = '8px';
+                demandWrapper.style.marginTop = '5px';
+
+                var demandLabel = document.createElement('label');
+                var demandInput = document.createElement('input');
+                demandInput.type = 'number';
+                demandInput.name = `customer_${i}_demand`;
+                demandInput.classList.add('form-control');
+                demandInput.placeholder = `Customer ${i + 1} Demand`;
+                demandInput.style.flex = '1';
+                demandInput.required = true;
+
+                var serviceTimeLabel = document.createElement('label');
+                var serviceTimeInput = document.createElement('input');
+                serviceTimeInput.type = 'number';
+                serviceTimeInput.name = `customer_${i}_service_time`;
+                serviceTimeInput.classList.add('form-control');
+                serviceTimeInput.placeholder = `Customer ${i + 1} Service Time (minutes)`;
+                serviceTimeInput.style.flex = '1';
+                serviceTimeInput.required = true;
+
+
+                timeWrapper.appendChild(readyTimeInput);
+                timeWrapper.appendChild(dueTimeInput);
+
+                titleTimeWrapper.appendChild(timeWrapper);
+
+                demandWrapper.appendChild(demandInput);
+                demandWrapper.appendChild(serviceTimeInput);
 
                 customerFormDiv.appendChild(customerNameLabel);
                 customerFormDiv.appendChild(customerNameInput);
-                customerFormDiv.appendChild(latLongWrapper);
+                customerFormDiv.appendChild(latlngInput);
 
+                customerFormDiv.appendChild(titleTimeWrapper);
+
+
+                customerFormDiv.appendChild(demandWrapper);
 
                 customerFormsContainer.appendChild(customerFormDiv);
             }
@@ -233,7 +320,6 @@
                 src_lon: src_lon,
                 dst_lat: dst_lat,
                 dst_lon: dst_lon
-
             };
 
 
@@ -303,7 +389,20 @@
         }
 
         map.on('click', onMapClick);
+
+
+        var my_func = function(event) {
+            event.preventDefault();
+        };
+
+        var form = document.getElementById("vrptw");
+
+        form.addEventListener("submit", my_func, true);
     </script>
+</body>
+
+</html> currentMarker.bindPopup("Coordinates: " + latlng.lat + ", " + latlng.lng).openPopup(); } map.on('click', onMapClick);
+</script>
 </body>
 
 </html>

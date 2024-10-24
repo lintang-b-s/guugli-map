@@ -536,9 +536,3 @@ for experiment in range(experiments):
 
 
 
-
-    # for i in range(random_chromosome_num):
-    #         results.append(create_random_chromosome( customers_size, customers, distance_matrix, fleet_capacity, fleet_total_time, customers_index, ))
-    # for j in range(greedy_chromosome_num):
-    #         results.append(create_greedy_chromosome( customers_size, customers, distance_matrix, fleet_capacity, fleet_total_time, customers_index, route_radius, ))
-         
