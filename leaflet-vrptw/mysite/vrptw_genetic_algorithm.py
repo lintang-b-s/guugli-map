@@ -37,17 +37,25 @@ class GA_VRPTW:
         self.population_distances = []
         self.population_results = []
         self.crossover_prob = crossover_prob
-        self.mutation_prob = 1/population_size
+        self.mutation_prob = 1 / population_size
 
         self.alpha = alpha
         self.beta = beta
 
     def create_population(self, customers_input, fleets_input, distance_matrix):
         """
-        attrs:
+        membuat populasi awal dengan cara 90% random dan 10% greedy
+
+        Params
+        ------
         customers: list[dict] . dict= {'id': int, 'demand': int, 'service_time': int, 'due_time': int, 'ready_time': int, 'lat': float, 'lon': float}
         fleets: list[dict]. dict = {fleet_size: int, 'fleet_capacity': int, 'fleet_max_working_time': int, 'fleet_lat': float, 'fleet_lon': float}
         distance_matrix: dict[dict]
+
+        Returns
+        ------
+        None
+
         """
 
         df_customers = pd.DataFrame(customers_input)
@@ -215,6 +223,14 @@ class GA_VRPTW:
         setiap iterasi, lakukan recombination, mutation, elitism, dan update populasi
 
         solusi terbaik adalah solusi terbaik dari semua chromosome terbaik setiap eksperimen
+
+
+        Returns
+        ------
+        best_solution_results: Dict -> {"num_vehicles": int, "total_distance": int, "fitness": float} -> hasil evaluasi solusi terbaik
+        best_solution_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute setiap vehicle solusi terbaik
+        best_solution_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle solusi terbaik
+        
         """
         best_solution_results = {}  # buat nyimpen solusi terbaik dari semua eksperiment
         best_solution_routes = []
@@ -228,8 +244,7 @@ class GA_VRPTW:
 
         for experiment in range(self.experiments):
             for generation in range(self.num_generations):
-                
-                
+
                 new_population_routes = []
                 new_population_distances = []
                 new_population_results = []
@@ -336,6 +351,11 @@ class GA_VRPTW:
         for reproduction. Otherwise, any chromosome is chosen for
         reproduction from the tournament set.
 
+        
+        Params
+        ------
+        population_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di populasi
+
         """
         random_chromosomes_idx = random.sample(
             range(population_results), self.tournament_size
@@ -376,11 +396,13 @@ class GA_VRPTW:
         """
         inversion mutasi satu chromosome
 
-        attrs:
+        Params
+        ------
         chromosome_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute setiap vehicle (satu chromosome routes)
         chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle
 
-        return:
+        Returns
+        ------
         is_this_route_valid: Bool -> True jika rute valid, False jika tidak valid
         chromosome_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute setiap vehicle setelah dimutasi
         chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle setelah dimutasi
@@ -393,18 +415,22 @@ class GA_VRPTW:
                 # untuk setiap rute vehicle di chromosome, kita hitung panjang rute nya
                 routes_len.append(len(chromosome_routes[i]))
 
-            feasible_idx = [] # index rute vehicle yang panjang rute nya >= 5
+            feasible_idx = []  # index rute vehicle yang panjang rute nya >= 5
             for i in range(len(routes_len)):
                 if routes_len[i] >= 5:
                     # jika panjang rute vehicle >= 5, maka kita bisa mutasi rute vehicle ini
                     feasible_idx.append(i)
 
             if len(feasible_idx) > 0:
-                #In this paper mutation is carried out only in one randomly chosen route so as to minimize total route disruption
+                # In this paper mutation is carried out only in one randomly chosen route so as to minimize total route disruption
                 rand_route = random.choice(feasible_idx)
-                mutated_route = copy.deepcopy(chromosome_routes[rand_route]) # deep copy agar perubahan 
+                mutated_route = copy.deepcopy(
+                    chromosome_routes[rand_route]
+                )  # deep copy agar perubahan
 
-                mutation_len = random.choice([2, 3])  # 2 atau 3 customer (panjang gen dari chromosome yang akan dimutasi)
+                mutation_len = random.choice(
+                    [2, 3]
+                )  # 2 atau 3 customer (panjang gen dari chromosome yang akan dimutasi)
                 len_mutated_route = len(mutated_route)
                 start_index = 1
 
@@ -451,12 +477,14 @@ class GA_VRPTW:
         """
         inverse mutation setiap chromosome di dalam populasi
 
-        attrs:
+        Params
+        ------
         pop_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di  populasi
         pop_chromosome_routes: List[List[List[int]]] -> [[[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]], ...] -> rute-rute setiap vehicle untuk setiap chromosome di populasi
         pop_chromosome_distances: List[List[int][] -> [[100, 200, 300], ...] -> eta total rute setiap vehicle untuk setiap chromosome di populasi
 
-        return:
+        Returns
+        ------
         pop_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di populasi setelah mutasi
         pop_chromosome_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute  setiap chromsome di populasi setelah mutasi
         pop_chromosome_distances: List[int] -> [100, 200, 300] ->eta total rute setiap vehicle untuk setiap chromosome di populasi setelah mutasi
@@ -503,7 +531,8 @@ class GA_VRPTW:
         misal mau insert customer "1" ke [0,2,3,4,0] -> kita coba satu satu posisi dari index 1 sampai index 3 (exclude titik depot)
         kalau lebih bagus & insertnya bikin jarak rute baru lebih pendek maka kita update rute, kita pilih posisi yang bikin jarak rute baru paling pendek
 
-        attrs:
+        Params
+        ------
         customer_to_insert: Int customer yang mau diinsert
         route: List[Int]-> [0,1,2,3,0] rute satu vehicle
         route_distance: Float jarak rute  satu vehicle
@@ -564,15 +593,24 @@ class GA_VRPTW:
         dari paper:
         the next step is to locate the best possible locations for the removed customers in the corresponding children.
 
-        attrs:
+        Params
+        ------
         cust_other_parent_to_insert: List[int] -> [1, 2, 3] -> customer yang akan diinsert ke dalam chromosome_routes
         chromosome_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> routes kromsom =  rute-rute setiap vehicle
         chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle
 
+        
+        Returns
+        ------
+        chromosome_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> routes kromsom =  rute-rute setiap vehicle setelah customer di cust_other_parent_to_insert diinsert
+        chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle setelah customer di cust_other_parent_to_insert diinsert
+        curr_chrom_total_distance: Int -> 600 -> eta total rute setelah customer di cust_other_parent_to_insert diinsert
         """
         for cust_to_insert in cust_other_parent_to_insert:
             # coba insert setiap customer di cust_other_parent_to_insert ke dalam chromosome_routes
-            curr_chrom_routes = chromosome_routes.copy() # shallow copy biar tidak keupdate chromosome_routes
+            curr_chrom_routes = (
+                chromosome_routes.copy()
+            )  # shallow copy biar tidak keupdate chromosome_routes
             curr_chrom_distances = chromosome_distances.copy()
             metadata = {
                 "routes": chromosome_routes,
@@ -654,10 +692,17 @@ class GA_VRPTW:
         """
         hapus customer di remove_customers dari chromosome_opposite_routes
 
-        attrs:
+        Params
+        ------
         remove_customers: List[int] -> [1, 2, 3] -> customer yang akan dihapus di chromosome_opposite_routes
         chromosome_opposite_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute setiap vehicle
         chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle
+
+        Returns
+        ------
+        chromosome_opposite_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute setiap vehicle setelah customer di remove_customers dihapus
+        chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle setelah customer di remove_customers dihapus
+
         """
         for i in remove_customers:
             for j in range(len(chromosome_opposite_routes)):
@@ -702,7 +747,8 @@ class GA_VRPTW:
         the upcoming C2., the next step is to locate the best possible locations for the removed
         customers in the corresponding children.
 
-        attrs:
+        Params
+        ------
         tournament_size: Int -> 4 -> ukuran tournament selection
         tournament_threshold: Float -> 0.7 -> threshold tournament selection
         population_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di populasi
@@ -715,7 +761,8 @@ class GA_VRPTW:
         fleet_total_time: Int -> 1000 -> waktu total kerja vehicle
         service_time: Int -> 100 -> waktu service setiap customer (anggap semua service time semua customer sama)
 
-        return:
+        Returns
+        ------
         chromosome1_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute vehicle chromosome 1
         chromosome2_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute vehicle chromosome 2
         chromosome1_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle chromosome 1
@@ -746,7 +793,6 @@ class GA_VRPTW:
 
         # . Next, for a given parechromosome2_distancesnt, the customers in the chosen route from the opposite parent are removed.
 
-
         chromosome1_routes = parent_one_routes.copy()
         chromosome2_routes = parent_two_routes.copy()
         chromosome1_distances = parent_one_distances.copy()
@@ -765,15 +811,17 @@ class GA_VRPTW:
             )  # hapus customer di remove_route_one dari routes parent_two
 
             chromosome1_routes, chromosome1_distances, chromosome1_total_distance = (
-                self.insertion(remove_route_two, parent_one_routes, parent_one_distances)
+                self.insertion(
+                    remove_route_two, parent_one_routes, parent_one_distances
+                )
             )  # insert customer yang ada di remove_route_two tadi ke parent_one, tapi sekarang insert ke best position
 
             chromosome2_routes, chromosome2_distances, chromosome2_total_distance = (
-                self.insertion(remove_route_one, parent_two_routes, parent_two_distances)
+                self.insertion(
+                    remove_route_one, parent_two_routes, parent_two_distances
+                )
             )  # insert customer yang ada di remove_route_one tadi ke parent_two, tapi sekarang insert ke best position
-        
-            
-        
+
         return (
             chromosome1_routes,
             chromosome2_routes,
@@ -795,7 +843,8 @@ class GA_VRPTW:
         """
         selection dan crossover
 
-        attrs:
+        Params
+        ------
         population_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di populasi
         new_population_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di populasi setelah recombination
         population_routes: List[List[List[int]]] -> [[[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]], ...] -> rute-rute setiap vehicle untuk setiap chromosome di populasi
@@ -803,8 +852,9 @@ class GA_VRPTW:
         new_population_routes: List[List[List[int]]] -> [[[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]], ...] -> rute-rute setiap vehicle untuk setiap chromosome di populasi setelah recombination
         new_population_distances: List[List[int]] -> [[100, 200, 300], ...] -> eta total rute setiap vehicle untuk setiap chromosome di populasi setelah recombination
 
-        
-        return:
+
+        Returns
+        ------
         new_population_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di populasi setelah recombination
         new_population_routes: List[List[List[int]]] -> [[[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]], ...] -> rute-rute setiap vehicle untuk setiap chromosome di populasi setelah recombination
         new_population_distances: List[List[int]] -> [[100, 200, 300], ...] -> eta total rute setiap vehicle untuk setiap chromosome di populasi setelah recombination
@@ -829,8 +879,8 @@ class GA_VRPTW:
             )
             childrens_after_recombination.append(
                 (
-                    chrom_one_routes, # 150
-                    chrom_two_routes, # 150
+                    chrom_one_routes,  # 150
+                    chrom_two_routes,  # 150
                     chrom_one_distances,
                     chrom_two_distances,
                     chrom_one_tot_distance,
@@ -840,7 +890,7 @@ class GA_VRPTW:
 
         for i in range(len(childrens_after_recombination)):
             res = childrens_after_recombination[i]
-            new_population_routes.append(res[0]) 
+            new_population_routes.append(res[0])
             new_population_routes.append(res[1])
             new_population_distances.append(res[2])
             new_population_distances.append(res[3])
@@ -1249,7 +1299,8 @@ def is_route_valid(route, distance_matrix, customers, fleet_total_time, fleet_ca
     """
     cek apakah rute valid atau gak
 
-    attrs:
+    Params
+        ------
     route: List[int] -> [0, 1, 2, 3, 0] -> rute vehicle
     distance_matrix: dict[dict] -> {0: {0: 0, 1: 100, 2: 200, ...}, 1: {0: 100, 1: 0, 2: 100, ...}, ...}
     customers: List[dict] -> [{'id': 1, 'demand': 10, 'service_time': 10, 'due_time': 100, 'ready_time': 0, 'lat': 0.0, 'lon': 0.0}, ...]
@@ -1324,6 +1375,16 @@ def is_route_valid(route, distance_matrix, customers, fleet_total_time, fleet_ca
 
 
 def fitness_function_weighted_sum(alpha, beta, chromosome_distances, chromosome_routes):
+    """
+    fitness function weighted sum untuk satu chromosome
+
+    Params
+    ------
+    alpha: float -> bobot untuk jumlah vehicle
+    beta: float -> bobot untuk total distance
+    chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle
+    chromosome_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute setiap vehicle
+    """
     total_distance = sum(chromosome_distances)
     num_vehicles = len(chromosome_routes)
     fitness = (alpha * num_vehicles) + (
@@ -1350,6 +1411,28 @@ def phase_two(
     costs of ri + ri+1 at Phase 1, the routing configuration at
     Phase 2 is accepted, otherwise the network topology before
     Phase 2 (i.e., at Phase 1) is maintained.
+
+
+    Params
+    ------
+    alpha: float -> bobot untuk jumlah vehicle
+    beta: float -> bobot untuk total distance
+    chromosome_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute setiap vehicle
+    chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle
+    distance_matrix: dict[dict] -> {0: {0: 0, 1: 100, 2: 200, ...}, 1: {0: 100, 1: 0, 2: 100, ...}, ...}
+    customers: List[dict] -> [{'id': 1, 'demand': 10, 'service_time': 10, 'due_time': 100, 'ready_time': 0, 'lat': 0.0, 'lon': 0.0}, ...]
+    fleet_total_time: int -> 1000
+    fleet_capacity: int -> 100
+
+
+    Returns
+    ------
+    chromosome_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute setiap vehicle
+    chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle
+    num_vehicles: int -> 3 -> jumlah vehicle
+    total_distance: int -> 600 -> total distance
+    fitness: float -> 0.5 -> fitness chromosome
+
     """
     indexes = [i for i in range(len(chromosome_routes) + 1)]
     indexes[len(chromosome_routes)] = (
@@ -1468,6 +1551,21 @@ def routing_phase_two(
     fleet_total_time,
     fleet_capacity,
 ):
+    """
+    
+    Params
+    ------
+    population_size: Int -> 300 -> ukuran populasi
+    alpha: float -> bobot untuk jumlah vehicle
+    beta: float -> bobot untuk total distance
+    population_routes: List[List[List[int]]] -> [[[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]], ...] -> rute-rute setiap vehicle untuk setiap chromosome di populasi
+    population_distances: List[List[int]] -> [[100, 200, 300], ...] -> eta total rute setiap vehicle untuk setiap chromosome di populasi
+    distance_matrix: Dict[Dict] -> {0: {0: 0, 1: 100, 2: 200, ...}, 1: {0: 100, 1: 0, 2: 100, ...}, ...} -> eta/jarak antar customer
+    customers: List[Dict] -> [{'id': int, 'demand': int, 'service_time': int, 'due_time': int, 'ready_time': int, 'lat': float, 'lon': float}, ...] -> data customer
+    fleet_capacity: Int -> 100 -> kapasitas fleet/vehicle
+    fleet_total_time: Int -> 1000 -> waktu total kerja fleet/vehicle
+
+    """
 
     results = []
     for i in range(population_size):

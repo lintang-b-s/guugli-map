@@ -51,7 +51,9 @@ def home(request):
             customer_due_time = datetime.strptime(
                 request.POST.get(f"customer_{i}_due_time"), date_format
             )
-            customer_service_time = float(request.POST.get(f"customer_{i}_service_time"))
+            customer_service_time = float(
+                request.POST.get(f"customer_{i}_service_time")
+            )
             customers.append(
                 {
                     "id": id_map[customer_name],
@@ -89,6 +91,10 @@ def home(request):
             fleets_input=[depot],
             distance_matrix=distance_matrix,
         )
+        best_solution_results, best_solution_routes, best_solution_distances = (
+            ga_population.solve()
+        )
+        
+
         return redirect("home")
     return render(request, "index.html", context)
-
