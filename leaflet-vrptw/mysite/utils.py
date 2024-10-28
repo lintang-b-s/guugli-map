@@ -37,4 +37,6 @@ def argmin(a):
     return min(range(len(a)), key=lambda x : a[x])
 
 def argmax(a):
-    return min(range(len(a)), key=lambda x : a[x])
+    return max(range(len(a)), key=lambda x : a[x])
+
+

@@ -11,16 +11,18 @@ import copy
 from .utils import argmin, argmax
 
 
-class GA_Poplation_Creator:
+class GA_VRPTW:
     def __init__(
         self,
-        experiments=30,
+        experiments=20,
         population_size=300,
         random_population=0.9,
         greedy_population=0.1,
         num_generations=400,
         tournament_size=4,
-        tournament_threshold=0.7,
+        tournament_threshold=0.8,
+        crossover_prob=0.7,
+        mutation_prob=0.1,
         alpha=100,
         beta=0.001,
     ):
@@ -34,6 +36,8 @@ class GA_Poplation_Creator:
         self.population_routes = []
         self.population_distances = []
         self.population_results = []
+        self.crossover_prob = crossover_prob
+        self.mutation_prob = 1/population_size
 
         self.alpha = alpha
         self.beta = beta
@@ -181,110 +185,177 @@ class GA_Poplation_Creator:
             print("membuat populasi experiment ke-", experiment)
 
     def elitism(self, pop_chromosome_routes, pop_chromosome_distances, pop_results):
+        """
+        pilih chromosome terbaik dari populasi (fitness paling kecil)
+
+        dari papernya:
+        An elite model is incorporated to ensure that the best
+        individual is carried on into the next generation
+        """
         fitnesses = []
         for i in range(len(pop_results)):
             fitnesses.append(pop_results[i]["fitness"])
+
         best_chromosome_idx = argmin(fitnesses)
         elite_chromosome_routes = pop_chromosome_routes[best_chromosome_idx]
         elite_chromosome_distances = pop_chromosome_distances[best_chromosome_idx]
         elite_chromosome_results = pop_results[best_chromosome_idx]
-        return elite_chromosome_routes, elite_chromosome_distances, elite_chromosome_results
-
-
+        return (
+            elite_chromosome_routes,
+            elite_chromosome_distances,
+            elite_chromosome_results,
+        )
 
     def solve(self):
-        best_solution_results = {}
+        """
+        solve vehicle routing problem with time windows menggunakan algoritma genetika
+
+        lakukan experiment sebanyak self.experiments
+        setiap experiment, lakukan iterasi sebanyak self.num_generations, simpan  chromosome terbaik di setiap populasi experiment
+        setiap iterasi, lakukan recombination, mutation, elitism, dan update populasi
+
+        solusi terbaik adalah solusi terbaik dari semua chromosome terbaik setiap eksperimen
+        """
+        best_solution_results = {}  # buat nyimpen solusi terbaik dari semua eksperiment
         best_solution_routes = []
         best_solution_distances = []
 
-        experiment_results = [] # buat nyimpen chromosome yang terbaik di setiap eksperiment
+        experiment_results = (
+            []
+        )  # buat nyimpen chromosome yang terbaik di setiap eksperiment
         experiment_routes = []
         experiment_distances = []
 
         for experiment in range(self.experiments):
             for generation in range(self.num_generations):
-                new_population_routes = [None] * self.population_size
-                new_population_distances = [None] * self.population_size
-                new_population_results = [[None] * 3] * self.population_size
+                
+                
+                new_population_routes = []
+                new_population_distances = []
+                new_population_results = []
 
                 # recombination (selection & crossover)
-                new_population_results, new_population_routes, new_population_distances = self.recombination_phase(
+                (
+                    new_population_results,
+                    new_population_routes,
+                    new_population_distances,
+                ) = self.recombination_phase(
                     self.population_results,
                     new_population_results,
                     self.population_routes,
                     self.population_distances,
                     new_population_routes,
                     new_population_distances,
-                    self.service_time,
                 )
 
-
                 # mutasi
-                new_population_results, new_population_routes, new_population_distances = self.mutation(
+                (
+                    new_population_results,
+                    new_population_routes,
+                    new_population_distances,
+                ) = self.mutation(
                     new_population_results,
                     new_population_routes,
                     new_population_distances,
                 )
 
-
                 # elitism
-                elite_chromosome_routes, elite_chromosome_distances, elite_chromosome_results = self.elitism(
-                    new_population_routes, new_population_distances, new_population_results
+                (
+                    elite_chromosome_routes,
+                    elite_chromosome_distances,
+                    elite_chromosome_results,
+                ) = self.elitism(
+                    new_population_routes,
+                    new_population_distances,
+                    new_population_results,
                 )
 
                 # ganti chromosome terburuk dalam populasi dengan elite chromosome
-                fitnesses = [] 
+                fitnesses = []
                 for i in range(len(new_population_results)):
                     fitnesses.append(new_population_results[i]["fitness"])
+
                 worst_chromosome_idx = argmax(fitnesses)
                 new_population_routes[worst_chromosome_idx] = elite_chromosome_routes
-                new_population_distances[worst_chromosome_idx] = elite_chromosome_distances
+                new_population_distances[worst_chromosome_idx] = (
+                    elite_chromosome_distances
+                )
                 new_population_results[worst_chromosome_idx] = elite_chromosome_results
 
                 # update populasi
                 self.population_routes = copy.deepcopy(new_population_routes)
                 self.population_distances = copy.deepcopy(new_population_distances)
                 self.population_results = copy.deepcopy(new_population_results)
-            
 
             # save chromosome terbaik di experiment ini
-            bext_chromosome_in_experiment_idx = argmin([chromosome["fitness"] for chromosome in self.population_results])
+            bext_chromosome_in_experiment_idx = argmin(
+                [chromosome["fitness"] for chromosome in self.population_results]
+            )
 
-            experiment_results.append({
-                "num_vehicles": self.population_results[bext_chromosome_in_experiment_idx]["num_vehicles"],
-                "total_distance": self.population_results[bext_chromosome_in_experiment_idx]["total_distance"],
-                "fitness": self.population_results[bext_chromosome_in_experiment_idx]["fitness"],
-            })
+            experiment_results.append(
+                {
+                    "num_vehicles": self.population_results[
+                        bext_chromosome_in_experiment_idx
+                    ]["num_vehicles"],
+                    "total_distance": self.population_results[
+                        bext_chromosome_in_experiment_idx
+                    ]["total_distance"],
+                    "fitness": self.population_results[
+                        bext_chromosome_in_experiment_idx
+                    ]["fitness"],
+                }
+            )
 
-            experiment_routes.append(self.population_routes[bext_chromosome_in_experiment_idx])
-            experiment_distances.append(self.population_distances[bext_chromosome_in_experiment_idx])
+            experiment_routes.append(
+                self.population_routes[bext_chromosome_in_experiment_idx]
+            )
+            experiment_distances.append(
+                self.population_distances[bext_chromosome_in_experiment_idx]
+            )
 
         # save best chromosome di semua experiments
-        best_solution_idx = argmin([chromosome["fitness"] for chromosome in experiment_results])
+        best_solution_idx = argmin(
+            [chromosome["fitness"] for chromosome in experiment_results]
+        )
         best_solution_results = experiment_results[best_solution_idx]
         best_solution_routes = experiment_routes[best_solution_idx]
         best_solution_distances = experiment_distances[best_solution_idx]
 
         return best_solution_results, best_solution_routes, best_solution_distances
 
-            
-
-
-
     def tournament_selection(self, population_results):
+        """
+
+        dari papernya:
+        . A set of Kindividuals are randomly selected from the population. This
+        is known as the tournament set. In this paper, the set size is
+        taken to be 4. We also select a random number r, between
+        0 and 1. If r is less than 0.8 (0.8 is set empirically by trying
+        values 0.6, 0.7, 0.8, 0.9 and 1.0), the fittest individual in
+        the tournament set is then chosen as the one to be used
+        for reproduction. Otherwise, any chromosome is chosen for
+        reproduction from the tournament set.
+
+        """
         random_chromosomes_idx = random.sample(
             range(population_results), self.tournament_size
-        )
-        random_chromosomes = [population_results[i] for i in random_chromosomes_idx]
-        if self.tournament_threshold > random.uniform(0, 1):
+        )  # pilih random chromosome sebanyak tournament_size
+        random_chromosomes = [
+            population_results[i] for i in random_chromosomes_idx
+        ]  # ambil chromosome dari index yang sudah dipilih
+        if random.uniform(0, 1) < self.tournament_threshold:
             # best_chromosome = min(random_chromosomes, key=lambda x: x['fitness'])
             rand_chrom_fitnesses = [
                 chromosome["fitness"] for chromosome in random_chromosomes
             ]
-            best_chromosome_idx = argmin(rand_chrom_fitnesses)
+            best_chromosome_idx = argmin(
+                rand_chrom_fitnesses
+            )  # pilih chromosome dengan fitness terkecil
             best_chromosome = random_chromosomes_idx[best_chromosome_idx]
         else:
-            best_chromosome = random.choice(random_chromosomes_idx)
+            best_chromosome = random.choice(
+                random_chromosomes_idx
+            )  # pilih random chromosome dari tournament set
         return best_chromosome
 
     def calculate_new_eta(self, route):
@@ -297,63 +368,133 @@ class GA_Poplation_Creator:
             eta += self.distance_matrix[route[i - 1]][route[i]]
         return eta
 
-    def mutation_chromosome(self, chromosome_routes, chromosome_distances, ):
-        is_route_valid = False
-        routes_len = []
-        for i in range(len(chromosome_routes)):
-            routes_len.append(len(chromosome_routes[i]))
-        
-        feasible_idx = []
-        for i in range(len(routes_len)):
-            if routes_len[i] >= 5:
-                feasible_idx.append(i)
-        
-        if len(feasible_idx) > 0: 
-            rand_route = random.choice(feasible_idx)
-            mutated_route = copy.deepcopy(chromosome_routes[rand_route])
-            mutation_len = random.choice([2,3]) # 2 atau 3 customer
-            len_mutated_route = len(mutated_route)
-            start_index = 1
-            if len_mutated_route-2>mutation_len:
-                start_index = random.randint(1, len_mutated_route-2-mutation_len) # set start cut point mutation exclude last customer
-            temp_mutated_custs = copy.deepcopy(mutated_route[start_index: start_index+mutation_len])
-            reversed_mutated_custs = temp_mutated_custs[::-1] # inversion mutation
-            mutated_route[start_index: start_index+mutation_len] = reversed_mutated_custs
-            is_route_valid, new_route_distance = is_route_valid(mutated_route, self.distance_matrix, self.customers, self.fleet["fleet_total_time"], self.fleet["fleet_capacity"])
-            if is_route_valid == True and new_route_distance <= chromosome_distances[rand_route]:
-                chromosome_routes[rand_route] = mutated_route
-                chromosome_distances[rand_route] = new_route_distance  
-        return is_route_valid, chromosome_routes, chromosome_distances
+    def mutation_chromosome(
+        self,
+        chromosome_routes,
+        chromosome_distances,
+    ):
+        """
+        inversion mutasi satu chromosome
 
+        attrs:
+        chromosome_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute setiap vehicle (satu chromosome routes)
+        chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle
 
-    def mutation(self, pop_results, pop_chromosome_routes, pop_chromosome_distances,):
-        
+        return:
+        is_this_route_valid: Bool -> True jika rute valid, False jika tidak valid
+        chromosome_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute setiap vehicle setelah dimutasi
+        chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle setelah dimutasi
+        """
+        if random.random() < self.mutation_prob:
+            is_this_route_valid = False
+            routes_len = []
+
+            for i in range(len(chromosome_routes)):
+                # untuk setiap rute vehicle di chromosome, kita hitung panjang rute nya
+                routes_len.append(len(chromosome_routes[i]))
+
+            feasible_idx = [] # index rute vehicle yang panjang rute nya >= 5
+            for i in range(len(routes_len)):
+                if routes_len[i] >= 5:
+                    # jika panjang rute vehicle >= 5, maka kita bisa mutasi rute vehicle ini
+                    feasible_idx.append(i)
+
+            if len(feasible_idx) > 0:
+                #In this paper mutation is carried out only in one randomly chosen route so as to minimize total route disruption
+                rand_route = random.choice(feasible_idx)
+                mutated_route = copy.deepcopy(chromosome_routes[rand_route]) # deep copy agar perubahan 
+
+                mutation_len = random.choice([2, 3])  # 2 atau 3 customer (panjang gen dari chromosome yang akan dimutasi)
+                len_mutated_route = len(mutated_route)
+                start_index = 1
+
+                if len_mutated_route - 2 > mutation_len:
+                    # jika jumlah customer yang dikunjungi vehicle > mutation_len, maka start_idx = random integer dari 1 sampai len_mutated_route - 2 - mutation_len
+                    # start cut point mutation
+                    start_index = random.randint(
+                        1, len_mutated_route - 2 - mutation_len
+                    )  # set start cut point mutation exclude last customer
+
+                temp_mutated_custs = copy.deepcopy(
+                    mutated_route[start_index : start_index + mutation_len]
+                )  # get customers yang mau dimutasi
+                reversed_mutated_custs = temp_mutated_custs[::-1]  # inversion mutation
+
+                mutated_route[start_index : start_index + mutation_len] = (
+                    reversed_mutated_custs  # perbarui rute vehicle dengan inverted customers di antara 2 cut point
+                )
+
+                is_this_route_valid, new_route_distance = is_route_valid(
+                    mutated_route,
+                    self.distance_matrix,
+                    self.customers,
+                    self.fleet["fleet_total_time"],
+                    self.fleet["fleet_capacity"],
+                )  # cek apakah rute baru valid
+
+                if (
+                    is_this_route_valid == True
+                    and new_route_distance <= chromosome_distances[rand_route]
+                ):
+                    # jika rute baru setelah dimutasi valid & jaraknya lebih kecil, maka kita update rute vehicle
+                    chromosome_routes[rand_route] = mutated_route
+                    chromosome_distances[rand_route] = new_route_distance
+
+        return is_this_route_valid, chromosome_routes, chromosome_distances
+
+    def mutation(
+        self,
+        pop_results,
+        pop_chromosome_routes,
+        pop_chromosome_distances,
+    ):
+        """
+        inverse mutation setiap chromosome di dalam populasi
+
+        attrs:
+        pop_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di  populasi
+        pop_chromosome_routes: List[List[List[int]]] -> [[[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]], ...] -> rute-rute setiap vehicle untuk setiap chromosome di populasi
+        pop_chromosome_distances: List[List[int][] -> [[100, 200, 300], ...] -> eta total rute setiap vehicle untuk setiap chromosome di populasi
+
+        return:
+        pop_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di populasi setelah mutasi
+        pop_chromosome_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute  setiap chromsome di populasi setelah mutasi
+        pop_chromosome_distances: List[int] -> [100, 200, 300] ->eta total rute setiap vehicle untuk setiap chromosome di populasi setelah mutasi
+
+        """
+
         mutation_res = []
         for i in range(0, self.population_size):
-            mutation_res.append(self.mutation_chromosome(pop_chromosome_routes[i], pop_chromosome_distances[i]))
-        
+            # mutasi setiap chromosome di dalam populasi
+            mutation_res.append(
+                self.mutation_chromosome(
+                    pop_chromosome_routes[i], pop_chromosome_distances[i]
+                )
+            )
+
         unzipped = zip(*mutation_res)
         results = list(unzipped)
 
-        updated_routes = []
+        updated_routes = []  # menyimpan chrosomsome yang dimutasi
         for i in range(0, self.population_size):
             if mutation_res[i][0] == True:
                 updated_routes.append(i)
-        
+
         if len(updated_routes) > 0:
+            # jika jumlah chromosome yang dimutasi > 0, maka kita update populasi dengan chromosome yang dimutasi
             for i in updated_routes:
                 # results = [is_route_valid, chromosome_routes, chromosome_distances]
                 pop_chromosome_routes[i] = copy.deepcopy(results[i][1])
                 pop_chromosome_distances[i] = copy.deepcopy(results[i][2])
                 pop_results[i] = {
-                    "num_vehicles": len(results[i][1]), 
+                    "num_vehicles": len(results[i][1]),
                     "total_distance": sum(results[i][2]),
-                    "fitness": fitness_function_weighted_sum(self.alpha, self.beta, results[i][2], results[i][1])
+                    "fitness": fitness_function_weighted_sum(
+                        self.alpha, self.beta, results[i][2], results[i][1]
+                    ),
                 }
 
-        return  pop_results, pop_chromosome_routes, pop_chromosome_distances
-
-
+        return pop_results, pop_chromosome_routes, pop_chromosome_distances
 
     def insert_customer(self, cust_to_insert, route, route_distance):
         """
@@ -364,40 +505,74 @@ class GA_Poplation_Creator:
 
         attrs:
         customer_to_insert: Int customer yang mau diinsert
-        route: List[Int] rute vehicle
-        route_distance: Float jarak rute vehicle
+        route: List[Int]-> [0,1,2,3,0] rute satu vehicle
+        route_distance: Float jarak rute  satu vehicle
         arr_customers: np.array data customer
         """
         inserted_status = False
-        arr_positions_to_insert = [i for i in range(1, len(route[1:-1])+1)] 
+        # len = 5 -> [0, 1, 2, 3, 0] -> 1, 2, 3 adalah customer, kita cuma bisa insert customer baru ke  posisi setelah cust 1/2/3 atau sebelum cust 1
+        arr_positions_to_insert = [
+            i for i in range(1, len(route[1:-1]) + 1)
+        ]  # posisi insert bukan di depot (bukan di titik awal dan akhir rute)
         update_route_distance_eval = 999999999
-        updated_route = route
+        updated_route = route.copy()  # rute baru yang udah diinsert cust_to_insert
         updated_distance = route_distance
         for positions_to_insert in arr_positions_to_insert:
-        # kita coba insert customer_to_insert ke dalam route di posisi positions_to_insert
-        # kita pake rute yang bikin distance rute baru lebih pendek dan paling kecil
-            
+            # coba satu satu posisi dari index 1 sampai sebelum customer akhir (exclude titik depot)
+            # kita coba insert customer_to_insert ke dalam route di posisi positions_to_insert
+            # kita pake rute yang bikin distance rute baru lebih pendek dan paling kecil
+
             new_route = route.copy()
             new_route.insert(positions_to_insert, cust_to_insert)
-            route_validity_status, curr_dist = is_route_valid(new_route, self.distance_matrix, self.customers, self.fleet["fleet_total_time"], self.fleet["fleet_capacity"],
-                                                               self.service_time)
+            route_validity_status, curr_dist = is_route_valid(
+                new_route,
+                self.distance_matrix,
+                self.customers,
+                self.fleet["fleet_total_time"],
+                self.fleet["fleet_capacity"],
+                self.service_time,
+            )  # cek apakah setelah insert customer_to_insert, rute vehicle yang baru masih valid
+
             if route_validity_status == True:
+                # jika rute vehicle yang baru masih valid, maka kita cek apakah jarak rute baru lebih pendek
                 inserted_status = True
-                distance_eval = curr_dist - route_distance
-                if distance_eval<update_route_distance_eval:
+                distance_eval = (
+                    curr_dist - route_distance
+                )  # jarak rute baru - jarak rute lama
+                if distance_eval < update_route_distance_eval:
+                    # jika jarak rute baru lebih pendek, maka kita update rute vehicle
                     updated_route = new_route
                     update_route_distance_eval = distance_eval
                     updated_distance = curr_dist
-                    
-            return inserted_status, updated_route, updated_distance, update_route_distance_eval
 
-
+        # return status insert, rute vehicle yang baru, jarak rute vehicle yang baru, jarak rute vehicle yang baru - jarak rute vehicle lama, setelah diinsert customer_to_insert
+        return (
+            inserted_status,
+            updated_route,
+            updated_distance,
+            update_route_distance_eval,
+        )
 
     def insertion(
         self, cust_other_parent_to_insert, chromosome_routes, chromosome_distances
     ):
+        """
+        insert customer yang ada di cust_other_parent_to_insert ke dalam chromosome_routes, insert ke best position
+        - best position = posisi yang bikin eta rute baru lebih pendek & memenuhi semua constraint vrptw
+
+
+        dari paper:
+        the next step is to locate the best possible locations for the removed customers in the corresponding children.
+
+        attrs:
+        cust_other_parent_to_insert: List[int] -> [1, 2, 3] -> customer yang akan diinsert ke dalam chromosome_routes
+        chromosome_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> routes kromsom =  rute-rute setiap vehicle
+        chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle
+
+        """
         for cust_to_insert in cust_other_parent_to_insert:
-            curr_chrom_routes = chromosome_routes.copy()
+            # coba insert setiap customer di cust_other_parent_to_insert ke dalam chromosome_routes
+            curr_chrom_routes = chromosome_routes.copy() # shallow copy biar tidak keupdate chromosome_routes
             curr_chrom_distances = chromosome_distances.copy()
             metadata = {
                 "routes": chromosome_routes,
@@ -405,43 +580,70 @@ class GA_Poplation_Creator:
                 "is_inserted": [False] * len(chromosome_routes),
                 "updated_distance": [0] * len(chromosome_routes),
             }
+
             is_inserted = False
 
             for i in range(len(chromosome_routes)):
-                route = chromosome_routes[i]
+                # coba insert custtoinsert ke dalam rute vehicle ke-i
+                route = chromosome_routes[i]  # rute vehicle ke-i
                 route_distance = chromosome_distances[i]
+
                 is_inserted, new_route, new_distance = self.insert_customer(
                     cust_to_insert, route, route_distance
-                )
+                )  # coba insert customer_to_insert ke dalam rute vehicle ke-i (insert ke best position)
+
                 if is_inserted:
+                    # jika bisa diinsert ke rute vehicle ke-i, maka kita update metadata rute vehicle ke-i
                     metadata["is_inserted"][i] = True
                     metadata["updated_distance"][i] = new_distance
                     metadata["updated_routes"][i] = new_route
+
             metadata["distance_diff"] = [
                 metadata["updated_distance"][i] - metadata["distances"][i]
                 for i in range(len(metadata["updated_distance"]))
-            ]
-            updated_chrom = []
+            ]  # jarak rute baru - jarak rute lama untuk setiap rute vehicle-vehicle di chromosome
+
+            updated_chrom = (
+                []
+            )  # berisi rute vehicle yang bisa diinsert customer_to_insert
             for i in range(len(metadata["routes"])):
                 if metadata["distance_diff"][i] > 0:
                     updated_chrom.append(metadata["distance_diff"][i])
+
             if len(updated_chrom) > 0:
-                min_route_idx = argmin(updated_chrom)
+                # jika  rute vehicle yang bisa diinsert customer_to_insert lebih dari 0, maka kita pilih rute vehicle yang jarak rute baru - jarak rute lama nya paling kecil
+
+                min_route_idx = argmin(
+                    updated_chrom
+                )  # pilih rute vehicle yang jarak rute baru - jarak rute lama nya paling kecil
                 curr_chrom_routes[min_route_idx] = copy.deepcopy(
                     metadata["updated_routes"][min_route_idx]
-                )
+                )  # update rute vehicle yang baru
+
                 curr_chrom_distances[min_route_idx] = metadata["updated_distance"][
                     min_route_idx
-                ]
-                curr_chrom_total_distance = sum(curr_chrom_distances)
+                ]  # update jarak rute vehicle yang baru
+
+                curr_chrom_total_distance = sum(
+                    curr_chrom_distances
+                )  # update jarak total rute vehicle yang baru
+
             else:
-                # create new route vehicle jika memang customer tidak bisa diinsert ke salah satu rute vehicle
-                new_vehicle_route = [0, cust_to_insert, 0]
-                curr_chrom_routes.append(new_vehicle_route)
+                # create new vehicle route jika memang customer tidak bisa diinsert ke salah satu rute vehicle
+                new_vehicle_route = [
+                    0,
+                    cust_to_insert,
+                    0,
+                ]  # vehicle baru hanya mengunjungi customer_to_insert
+                curr_chrom_routes.append(
+                    new_vehicle_route
+                )  # tambahkan vehicle baru ke dalam chromosome_routes
                 curr_chrom_distances.append(self.calculate_new_eta(new_vehicle_route))
                 curr_chrom_total_distance = sum(curr_chrom_distances)
 
-            chromosome_routes = copy.deepcopy(curr_chrom_routes)
+            chromosome_routes = copy.deepcopy(
+                curr_chrom_routes
+            )  # update chromosome_routes dengan chromosome yang baru diinsert customer_to_insert
             chromosome_distances = copy.deepcopy(curr_chrom_distances)
             curr_chrom_total_distance = sum(chromosome_distances)
         return chromosome_routes, chromosome_distances, curr_chrom_total_distance
@@ -459,14 +661,17 @@ class GA_Poplation_Creator:
         """
         for i in remove_customers:
             for j in range(len(chromosome_opposite_routes)):
-                if i in chromosome_opposite_routes[j]:
-                    if len(chromosome_opposite_routes[j]) > 3:
-                        chromosome_opposite_routes[j].remove(i)
+                chromosome_opposite_vehicle_route = chromosome_opposite_routes[j]
+                if i in chromosome_opposite_vehicle_route:
+                    if len(chromosome_opposite_vehicle_route) > 3:
+                        # jika vehicle ke j di rute nya mengunjungi lebih dari satu customer, maka hapus customer i
+                        chromosome_opposite_vehicle_route.remove(i)
                         chromosome_distances[j] = self.calculate_new_eta(
-                            chromosome_opposite_routes[j]
+                            chromosome_opposite_vehicle_route
                         )
                         break
-                    elif len(chromosome_opposite_routes[j]) == 3:
+                    elif len(chromosome_opposite_vehicle_route) == 3:
+                        # jika vehicle ke j di rute nya hanya mengunjungi satu customer, maka hapus rute vehicle ke j
                         chromosome_opposite_routes.pop(j)
                         chromosome_distances.pop(j)
                         j -= 1
@@ -476,53 +681,99 @@ class GA_Poplation_Creator:
 
     def recombination(
         self,
-        tournament_size,
-        tournament_threshold,
         population_results,
-        population_size,
         population_routes,
         population_distances,
-        customers,
-        distance_matrix,
-        ffleet_capacity,
-        ffleet_total_time,
-        service_time,
     ):
+        """
+        tournament selection dan crossover ( Best cost route crossover (BCRC))
+
+
+        dari papernya:
+        , from each parent, a route is chosen randomly. In this case, for P1,
+        route R2 with customers 5 and 6 is chosen, while for P2,
+        route R3 with customers 7 and 3 is picked. Next, for a given
+        parent, the customers in the chosen route from the opposite
+        parent are removed. For example in Step a, for parent P1,
+        customers 7 and 3 (which belonged to the randomly selected
+        route in P2) are removed from P1 resulting in the upcoming
+        child C1. Likewise customers 5 and 6 which belonged to a
+        route in P1 are removed from the routes in P2, resulting in
+        the upcoming C2., the next step is to locate the best possible locations for the removed
+        customers in the corresponding children.
+
+        attrs:
+        tournament_size: Int -> 4 -> ukuran tournament selection
+        tournament_threshold: Float -> 0.7 -> threshold tournament selection
+        population_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di populasi
+        population_size: Int -> 300 -> ukuran populasi
+        population_routes: List[List[List[int]]] -> [[[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]], ...] -> rute-rute setiap vehicle untuk setiap chromosome di populasi
+        population_distances: List[List[int]] -> [[100, 200, 300], ...] -> eta total rute setiap vehicle untuk setiap chromosome di populasi
+        customers: List[Dict] -> [{'id': int, 'demand': int, 'service_time': int, 'due_time': int, 'ready_time': int, 'lat': float, 'lon': float}, ...] -> data customer
+        distance_matrix: Dict[Dict] -> {0: {0: 0, 1: 100, 2: 200, ...}, 1: {0: 100, 1: 0, 2: 100, ...}, ...} -> eta/jarak antar customer
+        fleet_capacity: Int -> 100 -> kapasitas vehicle
+        fleet_total_time: Int -> 1000 -> waktu total kerja vehicle
+        service_time: Int -> 100 -> waktu service setiap customer (anggap semua service time semua customer sama)
+
+        return:
+        chromosome1_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute vehicle chromosome 1
+        chromosome2_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute vehicle chromosome 2
+        chromosome1_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle chromosome 1
+        chromosome2_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle chromosome 2
+
+
+
+        """
         parent_one = self.tournament_selection(population_results)
         parent_two = self.tournament_selection(population_results)
         while parent_one == parent_two:
+            # kalau parent_one == parent_two, kita pilih parent_two yang lain
             parent_two = self.tournament_selection(population_results)
 
-        parent_one_routes = population_routes[parent_one]  # rute-rute setiap vehicle
+        # rute-rute vehicles parent one
+        parent_one_routes = population_routes[parent_one]
         parent_two_routes = population_routes[parent_two]
         parent_one_distances = population_distances[parent_one]
         parent_two_distances = population_distances[parent_two]
-        parent_total_distance_one = population_results[parent_one][1]
-        parent_total_distance_two = population_results[parent_two][1]
 
         remove_route_one = parent_one_routes[
             random.randint(0, len(parent_one_routes) - 1)
-        ]  # pilih satu rute vehicle dari parent one, customer-customer di rute ini akan hapus di parent two dan diinsert ulang
+        ]  # pilih satu rute vehicle dari parent one, customer-customer di rute ini akan dihapus di parent two dan diinsert ulang di parent two
 
         remove_route_two = parent_two_routes[
             random.randint(0, len(parent_two_routes) - 1)
-        ]
+        ]  # pilih satu rute vehicle dari parent two, customer-customer di rute ini akan dihapus di parent one dan diinsert ulang di parent one
 
-        # . Next, for a given parent, the customers in the chosen route from the opposite parent are removed.
-        parent_one_routes, parent_one_distances = self.removal_crossover_customer(
-            remove_route_two, parent_one_routes, parent_one_distances
-        )
-        parent_two_routes, parent_two_distances = self.removal_crossover_customer(
-            remove_route_one, parent_two_routes, parent_two_distances
-        )
+        # . Next, for a given parechromosome2_distancesnt, the customers in the chosen route from the opposite parent are removed.
 
-        chromosome1_routes, chromosome1_distances, chromosome1_total_distance = self.insertion(
-            remove_route_two, parent_one_routes, parent_one_distances
-        )
-        chromosome2_routes, chromosome2_distances, chromosome2_total_distance = self.insertion(
-            remove_route_one, parent_two_routes, parent_two_distances
-        )
 
+        chromosome1_routes = parent_one_routes.copy()
+        chromosome2_routes = parent_two_routes.copy()
+        chromosome1_distances = parent_one_distances.copy()
+        chromosome2_distances = parent_two_distances.copy()
+        chromosome1_total_distance = sum(chromosome1_distances)
+        chromosome2_total_distance = sum(chromosome2_distances)
+
+        if random.random() < self.crossover_prob:
+            # jika random < crossover_prob, maka kita lakukan crossover
+            parent_one_routes, parent_one_distances = self.removal_crossover_customer(
+                remove_route_two, parent_one_routes, parent_one_distances
+            )  # hapus customer di remove_route_two dari routes parent_one
+
+            parent_two_routes, parent_two_distances = self.removal_crossover_customer(
+                remove_route_one, parent_two_routes, parent_two_distances
+            )  # hapus customer di remove_route_one dari routes parent_two
+
+            chromosome1_routes, chromosome1_distances, chromosome1_total_distance = (
+                self.insertion(remove_route_two, parent_one_routes, parent_one_distances)
+            )  # insert customer yang ada di remove_route_two tadi ke parent_one, tapi sekarang insert ke best position
+
+            chromosome2_routes, chromosome2_distances, chromosome2_total_distance = (
+                self.insertion(remove_route_one, parent_two_routes, parent_two_distances)
+            )  # insert customer yang ada di remove_route_one tadi ke parent_two, tapi sekarang insert ke best position
+        
+            
+        
         return (
             chromosome1_routes,
             chromosome2_routes,
@@ -540,10 +791,29 @@ class GA_Poplation_Creator:
         population_distances,
         new_population_routes,
         new_population_distances,
-        service_time,
     ):
+        """
+        selection dan crossover
+
+        attrs:
+        population_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di populasi
+        new_population_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di populasi setelah recombination
+        population_routes: List[List[List[int]]] -> [[[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]], ...] -> rute-rute setiap vehicle untuk setiap chromosome di populasi
+        population_distances: List[List[int]] -> [[100, 200, 300], ...] -> eta total rute setiap vehicle untuk setiap chromosome di populasi
+        new_population_routes: List[List[List[int]]] -> [[[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]], ...] -> rute-rute setiap vehicle untuk setiap chromosome di populasi setelah recombination
+        new_population_distances: List[List[int]] -> [[100, 200, 300], ...] -> eta total rute setiap vehicle untuk setiap chromosome di populasi setelah recombination
+
+        
+        return:
+        new_population_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di populasi setelah recombination
+        new_population_routes: List[List[List[int]]] -> [[[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]], ...] -> rute-rute setiap vehicle untuk setiap chromosome di populasi setelah recombination
+        new_population_distances: List[List[int]] -> [[100, 200, 300], ...] -> eta total rute setiap vehicle untuk setiap chromosome di populasi setelah recombination
+
+
+        """
         recombination_size = int(self.population_size / 2)
-        recombination_results = []
+        childrens_after_recombination = []
+
         for i in range(recombination_size):
             (
                 chrom_one_routes,
@@ -553,22 +823,14 @@ class GA_Poplation_Creator:
                 chrom_one_tot_distance,
                 chrom_two_tot_distance,
             ) = self.recombination(
-                self.tournament_size,
-                self.tournament_threshold,
                 population_results,
-                self.population_size,
                 population_routes,
                 population_distances,
-                self.customers,
-                self.distance_matrix,
-                self.fleet["fleet_capacity"],
-                self.fleet["fleet_total_time"],
-                service_time,
             )
-            recombination_results.append(
+            childrens_after_recombination.append(
                 (
-                    chrom_one_routes,
-                    chrom_two_routes,
+                    chrom_one_routes, # 150
+                    chrom_two_routes, # 150
                     chrom_one_distances,
                     chrom_two_distances,
                     chrom_one_tot_distance,
@@ -576,8 +838,9 @@ class GA_Poplation_Creator:
                 )
             )
 
-        for res in recombination_results:
-            new_population_routes.append(res[0])
+        for i in range(len(childrens_after_recombination)):
+            res = childrens_after_recombination[i]
+            new_population_routes.append(res[0]) 
             new_population_routes.append(res[1])
             new_population_distances.append(res[2])
             new_population_distances.append(res[3])
@@ -601,8 +864,6 @@ class GA_Poplation_Creator:
             )
 
         return new_population_results, new_population_routes, new_population_distances
-        
-        
 
 
 def euclidean_distance(p1, p2):

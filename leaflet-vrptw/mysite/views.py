@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from .vrptw_genetic_algorithm import GA_Poplation_Creator
+from .vrptw_genetic_algorithm import GA_VRPTW
 from .utils import IdMap
 from datetime import datetime
 import requests
@@ -83,7 +83,7 @@ def home(request):
                         distance_matrix[customer["id"]] = {}
                     distance_matrix[customer["id"]][customer_pair["id"]] = eta
 
-        ga_population = GA_Poplation_Creator()
+        ga_population = GA_VRPTW()
         ga_population.create_population(
             customers_input=customers,
             fleets_input=[depot],
