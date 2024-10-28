@@ -8,7 +8,7 @@ import concurrent.futures
 import threading
 import random
 import copy
-from .utils import argmin
+from .utils import argmin, argmax
 
 
 class GA_Poplation_Creator:
@@ -180,7 +180,27 @@ class GA_Poplation_Creator:
 
             print("membuat populasi experiment ke-", experiment)
 
+    def elitism(self, pop_chromosome_routes, pop_chromosome_distances, pop_results):
+        fitnesses = []
+        for i in range(len(pop_results)):
+            fitnesses.append(pop_results[i]["fitness"])
+        best_chromosome_idx = argmin(fitnesses)
+        elite_chromosome_routes = pop_chromosome_routes[best_chromosome_idx]
+        elite_chromosome_distances = pop_chromosome_distances[best_chromosome_idx]
+        elite_chromosome_results = pop_results[best_chromosome_idx]
+        return elite_chromosome_routes, elite_chromosome_distances, elite_chromosome_results
+
+
+
     def solve(self):
+        best_solution_results = {}
+        best_solution_routes = []
+        best_solution_distances = []
+
+        experiment_results = [] # buat nyimpen chromosome yang terbaik di setiap eksperiment
+        experiment_routes = []
+        experiment_distances = []
+
         for experiment in range(self.experiments):
             for generation in range(self.num_generations):
                 new_population_routes = [None] * self.population_size
@@ -208,7 +228,46 @@ class GA_Poplation_Creator:
 
 
                 # elitism
-                
+                elite_chromosome_routes, elite_chromosome_distances, elite_chromosome_results = self.elitism(
+                    new_population_routes, new_population_distances, new_population_results
+                )
+
+                # ganti chromosome terburuk dalam populasi dengan elite chromosome
+                fitnesses = [] 
+                for i in range(len(new_population_results)):
+                    fitnesses.append(new_population_results[i]["fitness"])
+                worst_chromosome_idx = argmax(fitnesses)
+                new_population_routes[worst_chromosome_idx] = elite_chromosome_routes
+                new_population_distances[worst_chromosome_idx] = elite_chromosome_distances
+                new_population_results[worst_chromosome_idx] = elite_chromosome_results
+
+                # update populasi
+                self.population_routes = copy.deepcopy(new_population_routes)
+                self.population_distances = copy.deepcopy(new_population_distances)
+                self.population_results = copy.deepcopy(new_population_results)
+            
+
+            # save chromosome terbaik di experiment ini
+            bext_chromosome_in_experiment_idx = argmin([chromosome["fitness"] for chromosome in self.population_results])
+
+            experiment_results.append({
+                "num_vehicles": self.population_results[bext_chromosome_in_experiment_idx]["num_vehicles"],
+                "total_distance": self.population_results[bext_chromosome_in_experiment_idx]["total_distance"],
+                "fitness": self.population_results[bext_chromosome_in_experiment_idx]["fitness"],
+            })
+
+            experiment_routes.append(self.population_routes[bext_chromosome_in_experiment_idx])
+            experiment_distances.append(self.population_distances[bext_chromosome_in_experiment_idx])
+
+        # save best chromosome di semua experiments
+        best_solution_idx = argmin([chromosome["fitness"] for chromosome in experiment_results])
+        best_solution_results = experiment_results[best_solution_idx]
+        best_solution_routes = experiment_routes[best_solution_idx]
+        best_solution_distances = experiment_distances[best_solution_idx]
+
+        return best_solution_results, best_solution_routes, best_solution_distances
+
+            
 
 
 
