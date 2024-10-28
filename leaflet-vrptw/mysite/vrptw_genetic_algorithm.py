@@ -6,6 +6,9 @@ import pandas as pd
 import sys
 import concurrent.futures
 import threading
+import random
+import copy
+from .utils import argmin
 
 
 class GA_Poplation_Creator:
@@ -15,6 +18,9 @@ class GA_Poplation_Creator:
         population_size=300,
         random_population=0.9,
         greedy_population=0.1,
+        num_generations=400,
+        tournament_size=4,
+        tournament_threshold=0.7,
         alpha=100,
         beta=0.001,
     ):
@@ -22,23 +28,18 @@ class GA_Poplation_Creator:
         self.population_size = population_size
         self.random_population = random_population
         self.greedy_population = greedy_population
+        self.num_generations = num_generations
+        self.tournament_size = tournament_size
+        self.tournament_threshold = tournament_threshold
+        self.population_routes = []
+        self.population_distances = []
+        self.population_results = []
+
         self.alpha = alpha
         self.beta = beta
 
     def create_population(self, customers_input, fleets_input, distance_matrix):
         """
-        awalnya ready_time, ...._time itu di fe pakai waktu jam, menit , bisa di hari yang beda...
-        ready_time di solvernya dihitung dari selisih ready_time-ready_time_depot (pakai menit )
-        complete_time dihitung dari selisih complete_time-complete_time_depot (pakai menit)
-        dst...
-
-        fleet_max_working_time dihitung dari selisih due_time - ready_time dalam jam,menit,detik (pakai menit)
-
-
-        .terus customers & fleets jadiin dataframe biar sama format algoritmanya
-
-        x -> longitude, y -> latitude
-
         attrs:
         customers: list[dict] . dict= {'id': int, 'demand': int, 'service_time': int, 'due_time': int, 'ready_time': int, 'lat': float, 'lon': float}
         fleets: list[dict]. dict = {fleet_size: int, 'fleet_capacity': int, 'fleet_max_working_time': int, 'fleet_lat': float, 'fleet_lon': float}
@@ -85,6 +86,14 @@ class GA_Poplation_Creator:
                     ),
                 }
             )
+
+        self.customers = customers
+        self.distance_matrix = distance_matrix
+        self.fleet = {
+            "fleet_total_time": fleet_total_time,
+            "fleet_capacity": fleet_capacity,
+        }
+        self.service_time = self.customers["service_time"]
 
         fleet_total_time = df_fleets.loc[0, "fleet_max_working_time"]
         fleet_capacity = df_fleets.loc[0, "fleet_capacity"]
@@ -144,10 +153,8 @@ class GA_Poplation_Creator:
             df_population_routes = pd.DataFrame(
                 {"routes": population_routes, "distances": population_distances}
             )
-            df_population_routes.to_csv(population_route_file, index=False)
 
-            # df_population_distances = pd.DataFrame({})
-            # df_population_distances.to_csv(population_distance_matrix_file, index=False)
+            df_population_routes.to_csv(population_route_file, index=False)
 
             df_initial_population_solution = pd.DataFrame(
                 {
@@ -157,9 +164,386 @@ class GA_Poplation_Creator:
                 }
             )
 
+            self.population_routes.append(population_routes)
+
+            self.population_results.append(
+                {
+                    "num_vehicles": population_num_routes,
+                    "total_distance": population_total_route_distances,
+                    "fitness": fitnesses,
+                }
+            )
+
+            self.population_distances.append(population_distances)
+
             df_initial_population_solution.to_csv(population_results_file, index=False)
 
             print("membuat populasi experiment ke-", experiment)
+
+    def solve(self):
+        for experiment in range(self.experiments):
+            for generation in range(self.num_generations):
+                new_population_routes = [None] * self.population_size
+                new_population_distances = [None] * self.population_size
+                new_population_results = [[None] * 3] * self.population_size
+
+                # recombination (selection & crossover)
+                new_population_results, new_population_routes, new_population_distances = self.recombination_phase(
+                    self.population_results,
+                    new_population_results,
+                    self.population_routes,
+                    self.population_distances,
+                    new_population_routes,
+                    new_population_distances,
+                    self.service_time,
+                )
+
+
+                # mutasi
+                new_population_results, new_population_routes, new_population_distances = self.mutation(
+                    new_population_results,
+                    new_population_routes,
+                    new_population_distances,
+                )
+
+
+                # elitism
+                
+
+
+
+    def tournament_selection(self, population_results):
+        random_chromosomes_idx = random.sample(
+            range(population_results), self.tournament_size
+        )
+        random_chromosomes = [population_results[i] for i in random_chromosomes_idx]
+        if self.tournament_threshold > random.uniform(0, 1):
+            # best_chromosome = min(random_chromosomes, key=lambda x: x['fitness'])
+            rand_chrom_fitnesses = [
+                chromosome["fitness"] for chromosome in random_chromosomes
+            ]
+            best_chromosome_idx = argmin(rand_chrom_fitnesses)
+            best_chromosome = random_chromosomes_idx[best_chromosome_idx]
+        else:
+            best_chromosome = random.choice(random_chromosomes_idx)
+        return best_chromosome
+
+    def calculate_new_eta(self, route):
+        """
+        new chromosome eta
+
+        """
+        eta = 0
+        for i in range(1, len(route)):
+            eta += self.distance_matrix[route[i - 1]][route[i]]
+        return eta
+
+    def mutation_chromosome(self, chromosome_routes, chromosome_distances, ):
+        is_route_valid = False
+        routes_len = []
+        for i in range(len(chromosome_routes)):
+            routes_len.append(len(chromosome_routes[i]))
+        
+        feasible_idx = []
+        for i in range(len(routes_len)):
+            if routes_len[i] >= 5:
+                feasible_idx.append(i)
+        
+        if len(feasible_idx) > 0: 
+            rand_route = random.choice(feasible_idx)
+            mutated_route = copy.deepcopy(chromosome_routes[rand_route])
+            mutation_len = random.choice([2,3]) # 2 atau 3 customer
+            len_mutated_route = len(mutated_route)
+            start_index = 1
+            if len_mutated_route-2>mutation_len:
+                start_index = random.randint(1, len_mutated_route-2-mutation_len) # set start cut point mutation exclude last customer
+            temp_mutated_custs = copy.deepcopy(mutated_route[start_index: start_index+mutation_len])
+            reversed_mutated_custs = temp_mutated_custs[::-1] # inversion mutation
+            mutated_route[start_index: start_index+mutation_len] = reversed_mutated_custs
+            is_route_valid, new_route_distance = is_route_valid(mutated_route, self.distance_matrix, self.customers, self.fleet["fleet_total_time"], self.fleet["fleet_capacity"])
+            if is_route_valid == True and new_route_distance <= chromosome_distances[rand_route]:
+                chromosome_routes[rand_route] = mutated_route
+                chromosome_distances[rand_route] = new_route_distance  
+        return is_route_valid, chromosome_routes, chromosome_distances
+
+
+    def mutation(self, pop_results, pop_chromosome_routes, pop_chromosome_distances,):
+        
+        mutation_res = []
+        for i in range(0, self.population_size):
+            mutation_res.append(self.mutation_chromosome(pop_chromosome_routes[i], pop_chromosome_distances[i]))
+        
+        unzipped = zip(*mutation_res)
+        results = list(unzipped)
+
+        updated_routes = []
+        for i in range(0, self.population_size):
+            if mutation_res[i][0] == True:
+                updated_routes.append(i)
+        
+        if len(updated_routes) > 0:
+            for i in updated_routes:
+                # results = [is_route_valid, chromosome_routes, chromosome_distances]
+                pop_chromosome_routes[i] = copy.deepcopy(results[i][1])
+                pop_chromosome_distances[i] = copy.deepcopy(results[i][2])
+                pop_results[i] = {
+                    "num_vehicles": len(results[i][1]), 
+                    "total_distance": sum(results[i][2]),
+                    "fitness": fitness_function_weighted_sum(self.alpha, self.beta, results[i][2], results[i][1])
+                }
+
+        return  pop_results, pop_chromosome_routes, pop_chromosome_distances
+
+
+
+    def insert_customer(self, cust_to_insert, route, route_distance):
+        """
+        kita coba insert customer_to_insert ke dalam route
+        kalau ternyata pas udah insert lebih baik, maka kita update route
+        misal mau insert customer "1" ke [0,2,3,4,0] -> kita coba satu satu posisi dari index 1 sampai index 3 (exclude titik depot)
+        kalau lebih bagus & insertnya bikin jarak rute baru lebih pendek maka kita update rute, kita pilih posisi yang bikin jarak rute baru paling pendek
+
+        attrs:
+        customer_to_insert: Int customer yang mau diinsert
+        route: List[Int] rute vehicle
+        route_distance: Float jarak rute vehicle
+        arr_customers: np.array data customer
+        """
+        inserted_status = False
+        arr_positions_to_insert = [i for i in range(1, len(route[1:-1])+1)] 
+        update_route_distance_eval = 999999999
+        updated_route = route
+        updated_distance = route_distance
+        for positions_to_insert in arr_positions_to_insert:
+        # kita coba insert customer_to_insert ke dalam route di posisi positions_to_insert
+        # kita pake rute yang bikin distance rute baru lebih pendek dan paling kecil
+            
+            new_route = route.copy()
+            new_route.insert(positions_to_insert, cust_to_insert)
+            route_validity_status, curr_dist = is_route_valid(new_route, self.distance_matrix, self.customers, self.fleet["fleet_total_time"], self.fleet["fleet_capacity"],
+                                                               self.service_time)
+            if route_validity_status == True:
+                inserted_status = True
+                distance_eval = curr_dist - route_distance
+                if distance_eval<update_route_distance_eval:
+                    updated_route = new_route
+                    update_route_distance_eval = distance_eval
+                    updated_distance = curr_dist
+                    
+            return inserted_status, updated_route, updated_distance, update_route_distance_eval
+
+
+
+    def insertion(
+        self, cust_other_parent_to_insert, chromosome_routes, chromosome_distances
+    ):
+        for cust_to_insert in cust_other_parent_to_insert:
+            curr_chrom_routes = chromosome_routes.copy()
+            curr_chrom_distances = chromosome_distances.copy()
+            metadata = {
+                "routes": chromosome_routes,
+                "distances": chromosome_distances,
+                "is_inserted": [False] * len(chromosome_routes),
+                "updated_distance": [0] * len(chromosome_routes),
+            }
+            is_inserted = False
+
+            for i in range(len(chromosome_routes)):
+                route = chromosome_routes[i]
+                route_distance = chromosome_distances[i]
+                is_inserted, new_route, new_distance = self.insert_customer(
+                    cust_to_insert, route, route_distance
+                )
+                if is_inserted:
+                    metadata["is_inserted"][i] = True
+                    metadata["updated_distance"][i] = new_distance
+                    metadata["updated_routes"][i] = new_route
+            metadata["distance_diff"] = [
+                metadata["updated_distance"][i] - metadata["distances"][i]
+                for i in range(len(metadata["updated_distance"]))
+            ]
+            updated_chrom = []
+            for i in range(len(metadata["routes"])):
+                if metadata["distance_diff"][i] > 0:
+                    updated_chrom.append(metadata["distance_diff"][i])
+            if len(updated_chrom) > 0:
+                min_route_idx = argmin(updated_chrom)
+                curr_chrom_routes[min_route_idx] = copy.deepcopy(
+                    metadata["updated_routes"][min_route_idx]
+                )
+                curr_chrom_distances[min_route_idx] = metadata["updated_distance"][
+                    min_route_idx
+                ]
+                curr_chrom_total_distance = sum(curr_chrom_distances)
+            else:
+                # create new route vehicle jika memang customer tidak bisa diinsert ke salah satu rute vehicle
+                new_vehicle_route = [0, cust_to_insert, 0]
+                curr_chrom_routes.append(new_vehicle_route)
+                curr_chrom_distances.append(self.calculate_new_eta(new_vehicle_route))
+                curr_chrom_total_distance = sum(curr_chrom_distances)
+
+            chromosome_routes = copy.deepcopy(curr_chrom_routes)
+            chromosome_distances = copy.deepcopy(curr_chrom_distances)
+            curr_chrom_total_distance = sum(chromosome_distances)
+        return chromosome_routes, chromosome_distances, curr_chrom_total_distance
+
+    def removal_crossover_customer(
+        self, remove_customers, chromosome_opposite_routes, chromosome_distances
+    ):
+        """
+        hapus customer di remove_customers dari chromosome_opposite_routes
+
+        attrs:
+        remove_customers: List[int] -> [1, 2, 3] -> customer yang akan dihapus di chromosome_opposite_routes
+        chromosome_opposite_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute setiap vehicle
+        chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle
+        """
+        for i in remove_customers:
+            for j in range(len(chromosome_opposite_routes)):
+                if i in chromosome_opposite_routes[j]:
+                    if len(chromosome_opposite_routes[j]) > 3:
+                        chromosome_opposite_routes[j].remove(i)
+                        chromosome_distances[j] = self.calculate_new_eta(
+                            chromosome_opposite_routes[j]
+                        )
+                        break
+                    elif len(chromosome_opposite_routes[j]) == 3:
+                        chromosome_opposite_routes.pop(j)
+                        chromosome_distances.pop(j)
+                        j -= 1
+                        break
+
+        return chromosome_opposite_routes, chromosome_distances
+
+    def recombination(
+        self,
+        tournament_size,
+        tournament_threshold,
+        population_results,
+        population_size,
+        population_routes,
+        population_distances,
+        customers,
+        distance_matrix,
+        ffleet_capacity,
+        ffleet_total_time,
+        service_time,
+    ):
+        parent_one = self.tournament_selection(population_results)
+        parent_two = self.tournament_selection(population_results)
+        while parent_one == parent_two:
+            parent_two = self.tournament_selection(population_results)
+
+        parent_one_routes = population_routes[parent_one]  # rute-rute setiap vehicle
+        parent_two_routes = population_routes[parent_two]
+        parent_one_distances = population_distances[parent_one]
+        parent_two_distances = population_distances[parent_two]
+        parent_total_distance_one = population_results[parent_one][1]
+        parent_total_distance_two = population_results[parent_two][1]
+
+        remove_route_one = parent_one_routes[
+            random.randint(0, len(parent_one_routes) - 1)
+        ]  # pilih satu rute vehicle dari parent one, customer-customer di rute ini akan hapus di parent two dan diinsert ulang
+
+        remove_route_two = parent_two_routes[
+            random.randint(0, len(parent_two_routes) - 1)
+        ]
+
+        # . Next, for a given parent, the customers in the chosen route from the opposite parent are removed.
+        parent_one_routes, parent_one_distances = self.removal_crossover_customer(
+            remove_route_two, parent_one_routes, parent_one_distances
+        )
+        parent_two_routes, parent_two_distances = self.removal_crossover_customer(
+            remove_route_one, parent_two_routes, parent_two_distances
+        )
+
+        chromosome1_routes, chromosome1_distances, chromosome1_total_distance = self.insertion(
+            remove_route_two, parent_one_routes, parent_one_distances
+        )
+        chromosome2_routes, chromosome2_distances, chromosome2_total_distance = self.insertion(
+            remove_route_one, parent_two_routes, parent_two_distances
+        )
+
+        return (
+            chromosome1_routes,
+            chromosome2_routes,
+            chromosome1_distances,
+            chromosome2_distances,
+            chromosome1_total_distance,
+            chromosome2_total_distance,
+        )
+
+    def recombination_phase(
+        self,
+        population_results,
+        new_population_results,
+        population_routes,
+        population_distances,
+        new_population_routes,
+        new_population_distances,
+        service_time,
+    ):
+        recombination_size = int(self.population_size / 2)
+        recombination_results = []
+        for i in range(recombination_size):
+            (
+                chrom_one_routes,
+                chrom_two_routes,
+                chrom_one_distances,
+                chrom_two_distances,
+                chrom_one_tot_distance,
+                chrom_two_tot_distance,
+            ) = self.recombination(
+                self.tournament_size,
+                self.tournament_threshold,
+                population_results,
+                self.population_size,
+                population_routes,
+                population_distances,
+                self.customers,
+                self.distance_matrix,
+                self.fleet["fleet_capacity"],
+                self.fleet["fleet_total_time"],
+                service_time,
+            )
+            recombination_results.append(
+                (
+                    chrom_one_routes,
+                    chrom_two_routes,
+                    chrom_one_distances,
+                    chrom_two_distances,
+                    chrom_one_tot_distance,
+                    chrom_two_tot_distance,
+                )
+            )
+
+        for res in recombination_results:
+            new_population_routes.append(res[0])
+            new_population_routes.append(res[1])
+            new_population_distances.append(res[2])
+            new_population_distances.append(res[3])
+            new_population_results.append(
+                {
+                    "num_vehicles": len(res[0]),
+                    "total_distance": res[4],
+                    "fitness": fitness_function_weighted_sum(
+                        self.alpha, self.beta, res[2], res[0]
+                    ),
+                }
+            )
+            new_population_results.append(
+                {
+                    "num_vehicles": len(res[1]),
+                    "total_distance": res[5],
+                    "fitness": fitness_function_weighted_sum(
+                        self.alpha, self.beta, res[3], res[1]
+                    ),
+                }
+            )
+
+        return new_population_results, new_population_routes, new_population_distances
+        
+        
 
 
 def euclidean_distance(p1, p2):
@@ -542,43 +926,78 @@ def initial_population(
 
 
 def is_route_valid(route, distance_matrix, customers, fleet_total_time, fleet_capacity):
+    """
+    cek apakah rute valid atau gak
+
+    attrs:
+    route: List[int] -> [0, 1, 2, 3, 0] -> rute vehicle
+    distance_matrix: dict[dict] -> {0: {0: 0, 1: 100, 2: 200, ...}, 1: {0: 100, 1: 0, 2: 100, ...}, ...}
+    customers: List[dict] -> [{'id': 1, 'demand': 10, 'service_time': 10, 'due_time': 100, 'ready_time': 0, 'lat': 0.0, 'lon': 0.0}, ...]
+    fleet_total_time: int -> 1000
+    fleet_capacity: int -> 100
+
+    """
     route_valid = True
 
-    city_one_idx = route[1] - 1
+    city_one_idx = route[1] - 1  # index customer pertama yang dikunjungi
+    # demang, ready_time, due_time, curr_time, curr_time_dist setelah kunjungi cusotmer pertama
     curr_demand = customers[city_one_idx]["demand"]
     ready_time = customers[city_one_idx]["ready_time"]
     due_time = customers[city_one_idx]["due_time"]
     curr_time = distance_matrix[route[0]][route[1]]
     curr_time_dist = distance_matrix[route[0]][route[1]]
 
+    # kunjungi customer selanjutnya
+    # skip depot, buat kunjungi next customers setelah customer ke-1
     for i in range(
-        len(route) - 3
-    ):  # route exclude depot(0), exclude last city sebelum depot
-        curr_time += distance_matrix[route[i]][route[i + 1]]
-        curr_time_dist += distance_matrix[route[i]][route[i + 1]]
-        next_city_idx = route[i + 1] - 1
-        ready_time = customers[next_city_idx]["ready_time"]
-        due_time = customers[next_city_idx]["due_time"]
-        service_time = customers[next_city_idx]["service_time"]
-        curr_demand += customers[next_city_idx]["demand"]
+        1, len(route) - 2
+    ):  # next_customers exclude titik depot(0) & exclude last city sebelum depot
+        # 1-2, 2-3, ....
+        curr_time += distance_matrix[route[i]][
+            route[i + 1]
+        ]  # curr_time setelah kunjungi customer ke i+1
+        curr_time_dist += distance_matrix[route[i]][
+            route[i + 1]
+        ]  # curr_time_dist setelah kunjungi customer ke i+1
+        next_city_idx = route[i + 1] - 1  # next city index di list customers
+        ready_time = customers[next_city_idx][
+            "ready_time"
+        ]  # ready time customer ke i+1
+        due_time = customers[next_city_idx]["due_time"]  # due time customer ke i+1
+        service_time = customers[next_city_idx][
+            "service_time"
+        ]  # service time customer ke i+1
+        curr_demand += customers[next_city_idx]["demand"]  # demand customer ke i+1
         if curr_time > due_time or curr_demand > fleet_capacity:
+            # cek apakah waktu saat kurir kunjungi customer ke-i+1 lebih dari due time customer ke-i+1
+            # atau demand customer ke-i+1 lebih dari kapasitas fleet
+            # kalau iya berarti rute tidak valid
             route_valid = False
             break
         else:
-            wait_time = max(0, ready_time - curr_time)
+            # else rute valid
+            wait_time = max(
+                0, ready_time - curr_time
+            )  # waktu tunggu kurir =  waktu ready customer ke-i+1 - waktu kurir sampai di customer ke-i+1
+            # kalau kurir sampai lebih terlambat dari ready_time berarti gak ada wait_time (wait_time = 0)
             if (
-                curr_time + wait_time < ready_time
-                or curr_time + wait_time + service_time > fleet_total_time
+                curr_time + wait_time + service_time
+                > fleet_total_time  # jika waktu kurir selesai melayani customer ke-i+1 melebihi jam pulang kurir -> rute tidak valid
+                or curr_time + wait_time < ready_time
             ):
                 route_valid = False
                 break
             else:
-                curr_time += wait_time + service_time
+                curr_time += (
+                    wait_time + service_time
+                )  # rute valid & curr_time setelah melayani customer ke-i+1 diupdate
 
     if route_valid == True:
+        # jika rute valid eta ditambah dengan eta antara last city ke depot
         curr_time += distance_matrix[route[-2]][route[-1]]  # from last city ke depot
         curr_time_dist += distance_matrix[route[-2]][route[-1]]
-        if curr_time > due_time:
+        if curr_time > fleet_total_time:
+            # jika waktu kurir saat sampai ke depot melebihi jam pulang -> rute tidak valid
             route_valid = False
 
     return route_valid, curr_time_dist
@@ -629,6 +1048,7 @@ def phase_two(
         is_route_two_valid, new_route_two_dist = is_route_valid(
             route_two, distance_matrix, customers, fleet_total_time, fleet_capacity
         )
+
         if is_route_two_valid == True:
             if len(route_one) > 3:
                 new_route_one_dist = (

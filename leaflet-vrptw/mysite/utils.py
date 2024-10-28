@@ -32,3 +32,6 @@ class IdMap:
             self.id_to_str[key] = val
         else:
             raise TypeError
+        
+def argmin(a):
+    return min(range(len(a)), key=lambda x : a[x])

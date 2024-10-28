@@ -340,7 +340,8 @@ def is_route_valid(route, distance_matrix, customers, fleet_total_time, fleet_ca
     curr_time = distance_matrix[route[0]][route[1]]
     curr_time_dist = distance_matrix[route[0]][route[1]]
 
-    for i in range(len(route)-3): # route exclude depot(0), exclude last city sebelum depot
+    # next_customers = route[1:-1]
+    for i in range(1, len(route)-2): # route exclude depot(0), exclude last city sebelum depot
         curr_time += distance_matrix[route[i]][route[i+1]]
         curr_time_dist += distance_matrix[route[i]][route[i+1]]
         next_city_idx = route[i+1]-1

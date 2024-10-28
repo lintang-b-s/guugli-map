@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from .create_population import GA_Poplation_Creator
+from .vrptw_genetic_algorithm import GA_Poplation_Creator
 from .utils import IdMap
 from datetime import datetime
 import requests
@@ -22,7 +22,6 @@ def home(request):
             request.POST.get("depot_due_time"), date_format
         )
         depot_capacity = float(request.POST.get("depot_capacity"))
-        # date_obj = datetime.strptime(date_str, date_format)
 
         depot = {
             "fleet_lat": depot_lat,
@@ -90,5 +89,6 @@ def home(request):
             fleets_input=[depot],
             distance_matrix=distance_matrix,
         )
-        return redirect("index.html")
+        return redirect("home")
     return render(request, "index.html", context)
+
