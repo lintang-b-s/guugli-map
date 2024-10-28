@@ -70,8 +70,16 @@ def home(request):
 
         sp_url = "http://localhost:5000/api/navigations/shortest-path"
         distance_matrix = {}
+        navigations_matrix = {}
         for customer in customers:
             for customer_pair in customers:
+                if customer_pair == customer:
+                    if customer["id"] not in distance_matrix:
+                        distance_matrix[customer["id"]] = {}
+                        navigations_matrix[customer["id"]] = {}
+                    distance_matrix[customer["id"]][customer_pair["id"]] = 0
+                    navigations_matrix[(customer["id"], customer_pair["id"])] = []
+                    continue
                 data = {
                     "src_lat": customer["lat"],
                     "src_lon": customer["lon"],
@@ -81,9 +89,14 @@ def home(request):
                 response = requests.post(sp_url, json=data)
                 if response.status_code == 200:
                     eta = response.json()["ETA"]
+                    navigations = response.json()["path"]
                     if customer["id"] not in distance_matrix:
                         distance_matrix[customer["id"]] = {}
+                        navigations_matrix[customer["id"]] = {}
                     distance_matrix[customer["id"]][customer_pair["id"]] = eta
+                    navigations_matrix[customer["id"]][
+                        customer_pair["id"]
+                    ] = navigations
 
         ga_population = GA_VRPTW()
         ga_population.create_population(
@@ -94,7 +107,36 @@ def home(request):
         best_solution_results, best_solution_routes, best_solution_distances = (
             ga_population.solve()
         )
-        
 
-        return redirect("home")
+        # best_solution_results =  {"num_vehicles": int, "total_distance": int, "fitness": float}
+        vehicles_routes = []  # polyline untuk setiap vehicles
+
+        for i in range(len(best_solution_routes)):
+            curr_vehicle_route = best_solution_routes[i]
+
+            curr_navigation = []  # polyline untuk vehicle ke-i
+            for j in range(len(curr_vehicle_route)):
+                if j == 0:
+                    continue
+                # navigasi dari customer ke-j-1 ke customer ke-j
+                polyline = navigations_matrix[curr_vehicle_route[j - 1]][curr_vehicle_route[j]]
+                curr_navigation.append(
+                    polyline
+                )
+
+            vehicles_routes.append(curr_navigation)
+
+        context = {
+            "depot_name": depot_name,
+            "depot_lat_lng": depot_lat_lng,
+            "depot_ready_time": depot_ready_time,
+            "depot_due_time": depot_due_time,
+            "depot_capacity": depot_capacity,
+            "number_of_customers": number_of_customers,
+            "customers": customers,
+            "best_solution_results": best_solution_results,
+            "vehicles_routes": vehicles_routes,
+            "best_solution_distances": best_solution_distances,
+        }
+        return render(request, "index.html", context)
     return render(request, "index.html", context)
