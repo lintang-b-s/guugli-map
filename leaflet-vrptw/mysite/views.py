@@ -22,7 +22,7 @@ def home(request):
             request.POST.get("depot_due_time"), date_format
         )
         depot_capacity = float(request.POST.get("depot_capacity"))
-
+    
         depot = {
             "fleet_lat": depot_lat,
             "fleet_lon": depot_lon,
@@ -37,6 +37,7 @@ def home(request):
         number_of_customers = int(request.POST.get("number_of_customers", 0))
         customers = []
         id_map = IdMap()
+        depot_id = id_map["depot"]
         for i in range(number_of_customers):
             customer_name = request.POST.get(f"customer_{i}_name")
             customer_lat_lng = request.POST.get(f"customer_{i}_lat_lng")
@@ -65,12 +66,21 @@ def home(request):
                     ).total_seconds(),
                     "due_time": (customer_due_time - depot_ready_time).total_seconds(),
                     "service_time": customer_service_time,
+                    "name": customer_name,
                 }
             )
 
         sp_url = "http://localhost:5000/api/navigations/shortest-path"
         distance_matrix = {}
         navigations_matrix = {}
+
+
+        distance_matrix[depot_id]  = {}
+        distance_matrix[depot_id][depot_id] = 0
+        navigations_matrix[depot_id] = {}
+        navigations_matrix[depot_id][depot_id] = []
+
+
         for customer in customers:
             for customer_pair in customers:
                 if customer_pair == customer:
@@ -86,17 +96,50 @@ def home(request):
                     "dst_lat": customer_pair["lat"],
                     "dst_lon": customer_pair["lon"],
                 }
+                try:
+
+                    response = requests.post(sp_url, json=data)
+                    if response.status_code == 200:
+                        eta = response.json()["ETA"]
+                        navigations = response.json()["path"]
+                        if customer["id"] not in distance_matrix:
+                            distance_matrix[customer["id"]] = {}
+                            navigations_matrix[customer["id"]] = {}
+                        distance_matrix[customer["id"]][customer_pair["id"]] = eta
+                        navigations_matrix[customer["id"]][
+                            customer_pair["id"]
+                        ] = navigations
+                except requests.exceptions.RequestException as e:
+                    print("Error request ke shortest-path API:", e)
+        for customer in customers:
+            data = {
+                "src_lat": depot_lat,
+                "src_lon": depot_lon,
+                "dst_lat": customer["lat"],
+                "dst_lon": customer["lon"],
+            }
+            data_reversed = {
+                "src_lat": customer["lat"],
+                "src_lon": customer["lon"],
+                "dst_lat": depot_lat,
+                "dst_lon": depot_lon,
+            }
+            try:
                 response = requests.post(sp_url, json=data)
                 if response.status_code == 200:
                     eta = response.json()["ETA"]
                     navigations = response.json()["path"]
-                    if customer["id"] not in distance_matrix:
-                        distance_matrix[customer["id"]] = {}
-                        navigations_matrix[customer["id"]] = {}
-                    distance_matrix[customer["id"]][customer_pair["id"]] = eta
-                    navigations_matrix[customer["id"]][
-                        customer_pair["id"]
-                    ] = navigations
+                    distance_matrix[depot_id][customer["id"]] = eta
+                    navigations_matrix[depot_id][customer["id"]] = navigations
+                response = requests.post(sp_url, json=data_reversed)
+
+                if response.status_code == 200:
+                    eta = response.json()["ETA"]
+                    navigations = response.json()["path"]
+                    distance_matrix[customer["id"]][depot_id] = eta
+                    navigations_matrix[customer["id"]][depot_id] = navigations
+            except requests.exceptions.RequestException as e:
+                print("Error request ke shortest-path API:", e)
 
         ga_population = GA_VRPTW()
         ga_population.create_population(

@@ -14,7 +14,7 @@ from .utils import argmin, argmax
 class GA_VRPTW:
     def __init__(
         self,
-        experiments=2,
+        experiments=1,
         population_size=300,
         random_population=0.9,
         greedy_population=0.1,
@@ -57,10 +57,11 @@ class GA_VRPTW:
         None
 
         """
+        print("creating populasi....")
 
         df_customers = pd.DataFrame(customers_input)
         df_fleets = pd.DataFrame(fleets_input)
-        num_customers = df_customers.shape[0] - 1
+        num_customers = df_customers.shape[0]
         num_customers_with_depot = num_customers + 1
 
         random_chromosome_num = math.floor(
@@ -86,12 +87,12 @@ class GA_VRPTW:
             customers.append(
                 {
                     "id": i,
-                    "demand": df_customers.loc[i, "demand"],
-                    "service_time": df_customers.loc[i, "service_time"],
-                    "ready_time": df_customers.loc[i, "ready_time"],
-                    "due_time": df_customers.loc[i, "due_time"],
-                    "complete_time": df_customers.loc[i, "due_time"]
-                    + df_customers.loc[i, "service_time"],
+                    "demand": df_customers.loc[i-1, "demand"],
+                    "service_time": df_customers.loc[i-1, "service_time"],
+                    "ready_time": df_customers.loc[i-1, "ready_time"],
+                    "due_time": df_customers.loc[i-1, "due_time"],
+                    "complete_time": df_customers.loc[i-1, "due_time"]
+                    + df_customers.loc[i-1, "service_time"],
                 }
             )
 
@@ -194,6 +195,7 @@ class GA_VRPTW:
             df_initial_population_solution.to_csv(population_results_file, index=False)
 
             print("membuat populasi experiment ke-", experiment)
+        print("selesai membuat populasi")
 
     def elitism(self, pop_chromosome_routes, pop_chromosome_distances, pop_results):
         """
@@ -235,6 +237,7 @@ class GA_VRPTW:
         best_solution_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle solusi terbaik
 
         """
+        print("solving vrptw....")
         best_solution_results = {}  # buat nyimpen solusi terbaik dari semua eksperiment
         best_solution_routes = []
         best_solution_distances = []
@@ -348,23 +351,11 @@ class GA_VRPTW:
         best_solution_results = experiment_results[best_solution_idx]
         best_solution_routes = experiment_routes[best_solution_idx]
         best_solution_distances = experiment_distances[best_solution_idx]
-
+        print("selesai solving vrptw")
         return best_solution_results, best_solution_routes, best_solution_distances
 
     def tournament_selection(self, population_results):
         """
-
-        dari papernya:
-        . A set of Kindividuals are randomly selected from the population. This
-        is known as the tournament set. In this paper, the set size is
-        taken to be 4. We also select a random number r, between
-        0 and 1. If r is less than 0.8 (0.8 is set empirically by trying
-        values 0.6, 0.7, 0.8, 0.9 and 1.0), the fittest individual in
-        the tournament set is then chosen as the one to be used
-        for reproduction. Otherwise, any chromosome is chosen for
-        reproduction from the tournament set.
-
-
         Params
         ------
         population_results: List[Dict] -> [{"num_vehicles": int, "total_distance": int, "fitness": float}, ...] -> hasil evaluasi setiap chromsome di populasi
@@ -987,6 +978,7 @@ def allowed_neigbors_search(
     )  # -> 0, 1, 2, ... , 24 (customer)
     # available_customers -> 1, 2, 3, ..., 25
 
+    available_customers_index = available_customers.copy()
     available_customers_index = [i - 1 for i in available_customers]
     for i in range(len(available_customers_index)):
         cust_index = available_customers_index[i]
@@ -1095,6 +1087,7 @@ def create_random_chromosome(
             curr_customer,
         )
         if len(allowed_neighbors) != 0:
+
             allowed_neighbors_id = []
             for i in range(len(allowed_neighbors)):
                 allowed_neighbors_id.append(allowed_neighbors[i]["id"])
@@ -1110,6 +1103,9 @@ def create_random_chromosome(
             available_customers.remove(curr_customer)
         else:
             # rute baru
+            if len(curr_route) == 1:
+                print("Error.... can't be solved!")
+                break
             curr_route.append(0)
             chromosome_routes.append(curr_route)
             curr_distance += distance_matrix[curr_customer][0]

@@ -269,7 +269,7 @@
     <!-- <script type="application/json" id="vehicles_routes"> -->
         {{ vehicles_routes|json_script:"vehicles_routes" }}
     <!-- </script> -->
-
+        {{ customers|json_script:"customers" }}
     <script>
         var map = L.map("map").setView([-7.767185059226205, 110.37619471539949], 14)
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -294,7 +294,19 @@
         var colors = ["#FF5733", "#33FF57", "#3357FF", "#FF33A1", "#A133FF", "#FFC733", "#33FFF5"];
         var colorIndex = 0;
 
+        // add marker semua customer
 
+
+        const customers = JSON.parse(document.getElementById('customers').textContent);
+        console.log("customers: ", customers);
+        for (customer of customers) {
+            var customerLat = customer.lat;
+            var customerLon = customer.lon;
+            console.log("customerLatLng: ", customerLat);
+            if (customerLat) {
+                var customerMarker = L.marker([customerLat, customerLon]).addTo(map).bindPopup("Customer: " + customer.name).openPopup();
+            }
+        }
       
         const vehicles_routes = JSON.parse(document.getElementById('vehicles_routes').textContent);
         console.log("routes polyline: ",vehicles_routes);
