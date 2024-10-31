@@ -153,9 +153,11 @@ def home(request):
 
         # best_solution_results =  {"num_vehicles": int, "total_distance": int, "fitness": float}
         vehicles_routes = []  # polyline untuk setiap vehicles
+        vehicles_route_orders = []  # urutan customer yang dilayani oleh setiap vehicles
 
         for i in range(len(best_solution_routes)):
             curr_vehicle_route = best_solution_routes[i]
+            vehicles_route_orders.append(curr_vehicle_route)
 
             curr_navigation = []  # polyline untuk vehicle ke-i
             for j in range(len(curr_vehicle_route)):
@@ -179,6 +181,7 @@ def home(request):
             "customers": customers,
             "best_solution_results": best_solution_results,
             "vehicles_routes": vehicles_routes,
+            "vehicles_route_orders": vehicles_route_orders,
             "best_solution_distances": best_solution_distances,
         }
         return render(request, "index.html", context)

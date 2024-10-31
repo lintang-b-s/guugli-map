@@ -36,6 +36,16 @@ class IdMap:
 def argmin(a):
     return min(range(len(a)), key=lambda x : a[x])
 
+def nanargmin(a):
+    minima = float('inf')
+    for i in range(len(a)):
+        if a[i] < minima and a[i] != 0:
+            minima = a[i]
+            idx = i
+    return idx
+    # return min(range(len(a)), key=lambda x : a[x])
+
+
 def argmax(a):
     return max(range(len(a)), key=lambda x : a[x])
 

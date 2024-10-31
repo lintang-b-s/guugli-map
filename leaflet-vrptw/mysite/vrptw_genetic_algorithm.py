@@ -8,7 +8,7 @@ import concurrent.futures
 import threading
 import random
 import copy
-from .utils import argmin, argmax
+from .utils import argmin, argmax, nanargmin
 
 
 class GA_VRPTW:
@@ -87,12 +87,12 @@ class GA_VRPTW:
             customers.append(
                 {
                     "id": i,
-                    "demand": df_customers.loc[i-1, "demand"],
-                    "service_time": df_customers.loc[i-1, "service_time"],
-                    "ready_time": df_customers.loc[i-1, "ready_time"],
-                    "due_time": df_customers.loc[i-1, "due_time"],
-                    "complete_time": df_customers.loc[i-1, "due_time"]
-                    + df_customers.loc[i-1, "service_time"],
+                    "demand": df_customers.loc[i - 1, "demand"],
+                    "service_time": df_customers.loc[i - 1, "service_time"],
+                    "ready_time": df_customers.loc[i - 1, "ready_time"],
+                    "due_time": df_customers.loc[i - 1, "due_time"],
+                    "complete_time": df_customers.loc[i - 1, "due_time"]
+                    + df_customers.loc[i - 1, "service_time"],
                 }
             )
 
@@ -537,7 +537,6 @@ class GA_VRPTW:
         kalau ternyata pas udah insert lebih baik, maka kita update route
         misal mau insert customer "1" ke [0,2,3,4,0] -> kita coba satu satu posisi dari index 1 sampai index 3 (exclude titik depot)
         kalau lebih bagus & insertnya bikin jarak rute baru lebih pendek maka kita update rute, kita pilih posisi yang bikin jarak rute baru paling pendek
-
         Params
         ------
         customer_to_insert: Int customer yang mau diinsert
@@ -550,6 +549,9 @@ class GA_VRPTW:
         arr_positions_to_insert = [
             i for i in range(1, len(route[1:-1]) + 1)
         ]  # posisi insert bukan di depot (bukan di titik awal dan akhir rute)
+        if len(arr_positions_to_insert) == 0:
+            # jika rute vehicle hanya mengunjungi depot, maka kita insert customer_to_insert di posisi 1
+            arr_positions_to_insert = [1]
         update_route_distance_eval = 999999999
         updated_route = route.copy()  # rute baru yang udah diinsert cust_to_insert
         updated_distance = route_distance
@@ -569,16 +571,16 @@ class GA_VRPTW:
             )  # cek apakah setelah insert customer_to_insert, rute vehicle yang baru masih valid
 
             if route_validity_status == True:
-                # jika rute vehicle yang baru masih valid, maka kita cek apakah jarak rute baru lebih pendek
+                # jika rute vehicle yang baru masih valid, maka kita cek apakah jarak rute baru lebih pendek dari percobaan insert customer lain
                 inserted_status = True
                 distance_eval = (
                     curr_dist - route_distance
                 )  # jarak rute baru - jarak rute lama
                 if distance_eval < update_route_distance_eval:
-                    # jika jarak rute baru lebih pendek, maka kita update rute vehicle
+                    # jika jarak rute baru lebih pendek dari percobaan insert customer di posisi lain, maka kita update rute vehicle
                     updated_route = new_route
                     update_route_distance_eval = distance_eval
-                    updated_distance = curr_dist
+                    updated_distance = curr_dist  # aneh
 
         # return status insert, rute vehicle yang baru, jarak rute vehicle yang baru, jarak rute vehicle yang baru - jarak rute vehicle lama, setelah diinsert customer_to_insert
         return (
@@ -594,8 +596,6 @@ class GA_VRPTW:
         """
         insert customer yang ada di cust_other_parent_to_insert ke dalam chromosome_routes, insert ke best position
         - best position = posisi yang bikin eta rute baru lebih pendek & memenuhi semua constraint vrptw
-
-
         dari paper:
         the next step is to locate the best possible locations for the removed customers in the corresponding children.
 
@@ -612,6 +612,7 @@ class GA_VRPTW:
         chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle setelah customer di cust_other_parent_to_insert diinsert
         curr_chrom_total_distance: Int -> 600 -> eta total rute setelah customer di cust_other_parent_to_insert diinsert
         """
+
         curr_chrom_total_distance = sum(chromosome_distances)
         for cust_to_insert in cust_other_parent_to_insert:
             # coba insert setiap customer di cust_other_parent_to_insert ke dalam chromosome_routes
@@ -625,13 +626,14 @@ class GA_VRPTW:
                 "is_inserted": [False] * len(chromosome_routes),
                 "updated_distance": [0] * len(chromosome_routes),
                 "updated_routes": [[]] * len(chromosome_routes),
+                "distance_diff": [0] * len(chromosome_routes),
             }
 
             is_inserted = False
 
             for i in range(len(chromosome_routes)):
                 # coba insert custtoinsert ke dalam rute vehicle ke-i
-                route = chromosome_routes[i]  # rute vehicle ke-i
+                route = chromosome_routes[i].copy()  # rute vehicle ke-i
                 route_distance = chromosome_distances[i]
 
                 is_inserted, new_route, new_distance, _ = self.insert_customer(
@@ -644,23 +646,24 @@ class GA_VRPTW:
                     metadata["updated_distance"][i] = new_distance
                     metadata["updated_routes"][i] = new_route
 
-            metadata["distance_diff"] = [
-                metadata["updated_distance"][i] - metadata["distances"][i]
-                for i in range(len(metadata["updated_distance"]))
-            ]  # jarak rute baru - jarak rute lama untuk setiap rute vehicle-vehicle di chromosome
+            # jarak rute baru - jarak rute lama untuk setiap rute vehicle-vehicle di chromosome setlah di insert
+            for k in range(len(metadata["updated_distance"])):
+                if metadata["updated_distance"][k] != 0:
+                    metadata["distance_diff"][k] = metadata["updated_distance"][k]
+                    metadata["distance_diff"][k] -= metadata["distances"][k]
 
             updated_chrom = (
                 []
-            )  # berisi rute vehicle yang bisa diinsert customer_to_insert
-            for i in range(len(metadata["routes"])):
-                if metadata["distance_diff"][i] > 0:
-                    updated_chrom.append(metadata["distance_diff"][i])
+            )  # berisi distance_diff rute vehicle  yang bisa diinsert customer_to_insert
+            for j in range(len(metadata["routes"])):
+                if metadata["distance_diff"][j] > 0:
+                    updated_chrom.append(metadata["distance_diff"][j])
 
             if len(updated_chrom) > 0:
                 # jika  rute vehicle yang bisa diinsert customer_to_insert lebih dari 0, maka kita pilih rute vehicle yang jarak rute baru - jarak rute lama nya paling kecil
 
-                min_route_idx = argmin(
-                    updated_chrom
+                min_route_idx = nanargmin(
+                    metadata["distance_diff"]
                 )  # pilih rute vehicle yang jarak rute baru - jarak rute lama nya paling kecil
                 curr_chrom_routes[min_route_idx] = copy.deepcopy(
                     metadata["updated_routes"][min_route_idx]
@@ -691,8 +694,7 @@ class GA_VRPTW:
                 curr_chrom_routes
             )  # update chromosome_routes dengan chromosome yang baru diinsert customer_to_insert
             chromosome_distances = copy.deepcopy(curr_chrom_distances)
-            if curr_chrom_total_distance != sum(chromosome_distances):
-                print("tes beda")
+
             curr_chrom_total_distance = sum(chromosome_distances)
         return chromosome_routes, chromosome_distances, curr_chrom_total_distance
 
@@ -712,7 +714,6 @@ class GA_VRPTW:
         ------
         chromosome_opposite_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute setiap vehicle setelah customer di remove_customers dihapus
         chromosome_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle setelah customer di remove_customers dihapus
-
         """
         for i in remove_customers:
             for j in range(len(chromosome_opposite_routes)):
@@ -729,6 +730,10 @@ class GA_VRPTW:
                         # jika vehicle ke j di rute nya hanya mengunjungi satu customer, maka hapus rute vehicle ke j
                         chromosome_opposite_routes.pop(j)
                         chromosome_distances.pop(j)
+
+                        # tambahan sendiri
+                        chromosome_opposite_routes.insert(j, [0, 0])
+                        chromosome_distances.insert(j, 0)
                         j -= 1
                         break
 
@@ -781,7 +786,9 @@ class GA_VRPTW:
 
 
         """
-        parent_one = self.tournament_selection(population_results)
+        parent_one = self.tournament_selection(
+            population_results
+        )  # pilih chromosome parent menggunakan tournament selection
         parent_two = self.tournament_selection(population_results)
         while parent_one == parent_two:
             # kalau parent_one == parent_two, kita pilih parent_two yang lain
@@ -936,7 +943,7 @@ class GA_VRPTW:
         return new_population_results, new_population_routes, new_population_distances
 
 
-def euclidean_distance(p1, p2):
+def euclidean_distance(p1, p2):  #
     return math.sqrt((p1["lon"] - p2["lon"]) ** 2 + (p1["lat"] - p2["lat"]) ** 2)
 
 
@@ -1441,7 +1448,7 @@ def is_route_valid(route, distance_matrix, customers, fleet_total_time, fleet_ca
     # kunjungi customer selanjutnya
     # skip depot, buat kunjungi next customers setelah customer ke-1
     for i in range(
-        1, len(route) - 2
+        1, len(route) - 1
     ):  # next_customers exclude titik depot(0) & exclude last city sebelum depot
         # 1-2, 2-3, ....
         curr_time += distance_matrix[route[i]][

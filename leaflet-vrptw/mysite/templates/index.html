@@ -270,6 +270,7 @@
         {{ vehicles_routes|json_script:"vehicles_routes" }}
     <!-- </script> -->
         {{ customers|json_script:"customers" }}
+          {{ vehicles_route_orders|json_script:"vehicles_route_orders" }}
     <script>
         var map = L.map("map").setView([-7.767185059226205, 110.37619471539949], 14)
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -286,7 +287,7 @@
                 
 
         var depotLatLng = "{{ depot_lat_lng }}";
-        console.log("latlng depot: ", depotLatLng);
+        // console.log("latlng depot: ", depotLatLng);
         if (depotLatLng) {
             depotLatLng = depotLatLng.split(",");
             var depotMarker = L.marker([depotLatLng[0], depotLatLng[1]]).addTo(map).bindPopup("Depot: {{ depot_name }}").openPopup();
@@ -298,31 +299,54 @@
 
 
         const customers = JSON.parse(document.getElementById('customers').textContent);
-        console.log("customers: ", customers);
-        for (customer of customers) {
-            var customerLat = customer.lat;
-            var customerLon = customer.lon;
-            console.log("customerLatLng: ", customerLat);
-            if (customerLat) {
-                var customerMarker = L.marker([customerLat, customerLon]).addTo(map).bindPopup("Customer: " + customer.name).openPopup();
+        // console.log("customers: ", customers);
+        // for (customer of customers) {
+        //     var customerLat = customer.lat;
+        //     var customerLon = customer.lon;
+        //     console.log("customerLatLng: ", customerLat);
+        //     if (customerLat) {
+        //         var customerMarker = L.marker([customerLat, customerLon]).addTo(map).bindPopup("Customer: " + customer.name  + "Latitude: " + customerLat + "<br>" + "Longitude: " + customerLon + "<br>"
+        //         ).openPopup();
+        //     }
+        // }
+        const vehicles_route_orders = JSON.parse(document.getElementById('vehicles_route_orders').textContent);
+        for (let i=0; i < vehicles_route_orders.length; i++) {
+            let vehicle = vehicles_route_orders[i];
+            let order = 1;
+            for (customer of vehicle) {
+                if (customer ==0) {
+                    continue;
+                }
+                console.log("customer:", customer)
+                var customerLatLng = customers[customer-1];
+                var customerLat = customerLatLng.lat;
+                var customerLon = customerLatLng.lon;
+                console.log("customerLatLng: ", customerLat);
+                if (customerLat) {
+                    var customerMarker = L.marker([customerLat, customerLon]).addTo(map).bindPopup("Customer: " + customer.name  + "Latitude: " + customerLat + "<br>" + "Longitude: " + customerLon + "<br>"
+                     + "Vehicle: " + i + "<br>" + "Order: " + order
+                    ).openPopup();
+                }
+                order += 1;
             }
         }
+        
       
         const vehicles_routes = JSON.parse(document.getElementById('vehicles_routes').textContent);
-        console.log("routes polyline: ",vehicles_routes);
+        // console.log("routes polyline: ",vehicles_routes);
 
         for (vehicle_route of vehicles_routes ) {
             var vehicleRoute = vehicle_route;
-            console.log("vehicleRoute: ", vehicleRoute);
+            // console.log("vehicleRoute: ", vehicleRoute);
             var polylineCoordinates = [];
             for (var i = 0; i < vehicleRoute.length; i++) {
                 var polylineString = vehicleRoute[i];
-                console.log("polylineString: ", polylineString);
+                // console.log("polylineString: ", polylineString);
                 var polylineCoordinate = polyline.decode(polylineString);
-                console.log("polylineCoordinate: ", polylineCoordinate);
+                // console.log("polylineCoordinate: ", polylineCoordinate);
                 polylineCoordinates.push(...polylineCoordinate);
             }
-            console.log("polylineCoordinates: ", polylineCoordinates);
+            // console.log("polylineCoordinates: ", polylineCoordinates);
 
             polylineLayerVRP = L.polyline(polylineCoordinates, {
                 color: colors[colorIndex % colors.length],
@@ -522,6 +546,14 @@
 
         var currentMarker = null;
 
+        let activeCustomerLatLng = null;
+        document.getElementById('customer-forms').addEventListener('focusin', function(event) {
+            if (event.target && event.target.name.includes('customer_') && event.target.name.includes('_lat_lng')) {
+                    activeInputField = event.target; 
+            }
+        });
+
+
         function onMapClick(e) {
             if (polylineLayer) {
                 map.removeLayer(polylineLayer);
@@ -539,6 +571,11 @@
             currentMarker = L.marker([latlng.lat, latlng.lng]).addTo(map);
 
             currentMarker.bindPopup("Coordinates: " + latlng.lat + ", " + latlng.lng).openPopup();
+
+            if (activeInputField) {
+                activeInputField.value = latlng.lat + ", " + latlng.lng;
+                activeInputField = null;
+            }
         }
 
         map.on('click', onMapClick);
@@ -554,10 +591,15 @@
                 form.addEventListener("submit", my_func, true);
             }
         });
+
+       
+        
+
+
     </script>
 </body>
 
-</html> currentMarker.bindPopup("Coordinates: " + latlng.lat + ", " + latlng.lng).openPopup(); } map.on('click', onMapClick);
+</html> 
 </script>
 </body>
 
