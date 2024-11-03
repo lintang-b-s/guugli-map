@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from .vrptw_genetic_algorithm import GA_VRPTW
 from .utils import IdMap
 from datetime import datetime
+import time 
 import requests
 
 
@@ -22,14 +23,14 @@ def home(request):
             request.POST.get("depot_due_time"), date_format
         )
         depot_capacity = float(request.POST.get("depot_capacity"))
-    
+
         depot = {
             "fleet_lat": depot_lat,
             "fleet_lon": depot_lon,
             "ready_time": 0,
             "fleet_max_working_time": (
                 depot_due_time - depot_ready_time
-            ).total_seconds(),
+            ).total_seconds() / 60,
             "fleet_capacity": depot_capacity,
             "fleet_size": 25,
         }
@@ -63,8 +64,8 @@ def home(request):
                     "demand": customer_demand,
                     "ready_time": (
                         customer_ready_time - depot_ready_time
-                    ).total_seconds(),
-                    "due_time": (customer_due_time - depot_ready_time).total_seconds(),
+                    ).total_seconds() / 60,
+                    "due_time": (customer_due_time - depot_ready_time).total_seconds() / 60,
                     "service_time": customer_service_time,
                     "name": customer_name,
                 }
@@ -74,12 +75,10 @@ def home(request):
         distance_matrix = {}
         navigations_matrix = {}
 
-
-        distance_matrix[depot_id]  = {}
+        distance_matrix[depot_id] = {}
         distance_matrix[depot_id][depot_id] = 0
         navigations_matrix[depot_id] = {}
         navigations_matrix[depot_id][depot_id] = []
-
 
         for customer in customers:
             for customer_pair in customers:
@@ -164,10 +163,10 @@ def home(request):
                 if j == 0:
                     continue
                 # navigasi dari customer ke-j-1 ke customer ke-j
-                polyline = navigations_matrix[curr_vehicle_route[j - 1]][curr_vehicle_route[j]]
-                curr_navigation.append(
-                    polyline
-                )
+                polyline = navigations_matrix[curr_vehicle_route[j - 1]][
+                    curr_vehicle_route[j]
+                ]
+                curr_navigation.append(polyline)
 
             vehicles_routes.append(curr_navigation)
 
@@ -186,3 +185,210 @@ def home(request):
         }
         return render(request, "index.html", context)
     return render(request, "index.html", context)
+
+
+def vrptw_from_csv(request):
+    context = {}
+    date_format = "%Y-%m-%d %H:%M:%S"
+
+    if request.method == "POST":
+        id_map = IdMap()
+        customers = []
+        depot_id = id_map["depot"]
+        fleets = {}
+        fleet_due_time = 0
+        try:
+            csv_file_fleets = request.FILES["fleets-file"]
+            csv_file_customers = request.FILES["customers-file"]
+            if not csv_file_fleets.name.endswith(".csv"):
+                print("File is not CSV type")
+
+            if csv_file_fleets.multiple_chunks():
+                print(
+                    "Uploaded file is too big (%.2f MB)."
+                    % (csv_file_fleets.size / (1000 * 1000),)
+                )
+
+            file_fleets_data = csv_file_fleets.read().decode("utf-8")
+            file_customers_data = csv_file_customers.read().decode("utf-8")
+
+            customer_lines = file_customers_data.split("\n")
+            lines = file_fleets_data.split("\n")
+
+            fleet_ready_time = 0
+            for line in lines:
+                fields = line.split(",")
+                for i in range(len(fields)):
+                    fields[i] = fields[i].lstrip()
+
+                if fields[1] == "fleet_capacity":
+                    continue
+                fleet_ready_time = datetime.strptime(fields[-2], date_format)
+                fleet_due_time = datetime.strptime(fields[-1], date_format)
+                fleet_max_working_time = (
+                    fleet_due_time - fleet_ready_time
+                ).total_seconds() / 60
+
+                fleets["fleet_capacity"] = float(fields[1])
+                fleets["fleet_lon"] = float(fields[2])
+                fleets["fleet_lat"] = float(fields[3])
+                fleets["fleet_max_working_time"] = float(fleet_max_working_time)
+                fleets["fleet_size"] = float(fields[0])
+                fleets["ready_time"] = 0
+
+            i = 0
+            for line in customer_lines:
+                fields = line.split(",")
+                if fields[1] == "XC":
+                    continue
+
+                for j in range(len(fields)):
+                    fields[j] = fields[j].lstrip()
+
+                customer_ready_time_data = datetime.strptime(fields[4], date_format)
+                customer_ready_time_from_depot = (
+                    customer_ready_time_data - fleet_ready_time
+                ).total_seconds() / 60
+                customer_due_time = datetime.strptime(fields[5], date_format)
+                fields[6] = fields[6].split(":")[1]
+                customers.append(
+                    {
+                        "id": int(id_map[str(i)]),
+                        "lat": float(fields[2]),
+                        "lon": float(fields[1]),
+                        "demand": float(fields[3]),
+                        "ready_time": customer_ready_time_from_depot,
+                        "due_time": (
+                            customer_due_time - fleet_ready_time
+                        ).total_seconds() / 60,
+                        "service_time": float(fields[6]),
+                        "name": str(i),
+                    }
+                )
+                i += 1
+        except Exception as e:
+            print("Unable to upload file. ", e)
+
+        sp_url = "http://localhost:5000/api/navigations/shortest-path"
+        distance_matrix = {}
+        navigations_matrix = {}
+
+        distance_matrix[depot_id] = {}
+        distance_matrix[depot_id][depot_id] = 0
+        navigations_matrix[depot_id] = {}
+        navigations_matrix[depot_id][depot_id] = []
+
+        for customer in customers:
+            for customer_pair in customers:
+                if customer_pair == customer:
+                    if customer["id"] not in distance_matrix:
+                        distance_matrix[customer["id"]] = {}
+                        navigations_matrix[customer["id"]] = {}
+                    distance_matrix[customer["id"]][customer_pair["id"]] = 0
+                    navigations_matrix[(customer["id"], customer_pair["id"])] = []
+                    continue
+                data = {
+                    "src_lat": customer["lat"],
+                    "src_lon": customer["lon"],
+                    "dst_lat": customer_pair["lat"],
+                    "dst_lon": customer_pair["lon"],
+                }
+                try:
+
+                    response = requests.post(sp_url, json=data)
+                    if response.status_code == 200:
+                        eta = response.json()["ETA"]
+                        navigations = response.json()["path"]
+                        if customer["id"] not in distance_matrix:
+                            distance_matrix[customer["id"]] = {}
+                            navigations_matrix[customer["id"]] = {}
+                        distance_matrix[customer["id"]][customer_pair["id"]] = eta
+                        navigations_matrix[customer["id"]][
+                            customer_pair["id"]
+                        ] = navigations
+                except requests.exceptions.RequestException as e:
+                    print("Error request ke shortest-path API:", e)
+
+        for customer in customers:
+            data = {
+                "src_lat": fleets["fleet_lat"],
+                "src_lon": fleets["fleet_lon"],
+                "dst_lat": customer["lat"],
+                "dst_lon": customer["lon"],
+            }
+            data_reversed = {
+                "src_lat": customer["lat"],
+                "src_lon": customer["lon"],
+                "dst_lat": fleets["fleet_lat"],
+                "dst_lon": fleets["fleet_lon"],
+            }
+            try:
+                response = requests.post(sp_url, json=data)
+                if response.status_code == 200:
+                    eta = response.json()["ETA"]
+                    navigations = response.json()["path"]
+                    distance_matrix[depot_id][customer["id"]] = eta
+                    navigations_matrix[depot_id][customer["id"]] = navigations
+                response = requests.post(sp_url, json=data_reversed)
+
+                if response.status_code == 200:
+                    eta = response.json()["ETA"]
+                    navigations = response.json()["path"]
+                    distance_matrix[customer["id"]][depot_id] = eta
+                    navigations_matrix[customer["id"]][depot_id] = navigations
+            except requests.exceptions.RequestException as e:
+                print("Error request ke shortest-path API:", e)
+
+        start_time = time.time()
+        ga_population = GA_VRPTW()
+        ga_population.create_population(
+            customers_input=customers,
+            fleets_input=[fleets],
+            distance_matrix=distance_matrix,
+        )
+
+
+        best_solution_results, best_solution_routes, best_solution_distances = (
+            ga_population.solve()
+        )
+        end_time = time.time()
+        runtime = end_time - start_time
+        print(f"lama waktu solve: {runtime/ 60}")
+        # aneh rute cuma 1 vehicle tapi distances nya lebih dari satu vehicle 
+
+        # best_solution_results =  {"num_vehicles": int, "total_distance": int, "fitness": float}
+        vehicles_routes = []  # polyline untuk setiap vehicles
+        vehicles_route_orders = []  # urutan customer yang dilayani oleh setiap vehicles
+
+        for i in range(len(best_solution_routes)):
+            curr_vehicle_route = best_solution_routes[i]
+            vehicles_route_orders.append(curr_vehicle_route)
+
+            curr_navigation = []  # polyline untuk vehicle ke-i
+            for j in range(len(curr_vehicle_route)):
+                if j == 0:
+                    continue
+                # navigasi dari customer ke-j-1 ke customer ke-j
+                polyline = navigations_matrix[curr_vehicle_route[j - 1]][
+                    curr_vehicle_route[j]
+                ]
+                curr_navigation.append(polyline)
+
+            vehicles_routes.append(curr_navigation)
+        depot_lat_lng = f"{fleets['fleet_lat']}, {fleets['fleet_lon']}"
+        context = {
+            "depot_name": "depot",
+            "depot_lat_lng": depot_lat_lng,
+            "depot_ready_time": fleets["ready_time"],
+            "depot_due_time": fleet_due_time,
+            "depot_capacity": fleets["fleet_capacity"],
+            "number_of_customers": len(customers),
+            "customers": customers,
+            "best_solution_results": best_solution_results,
+            "vehicles_routes": vehicles_routes,
+            "vehicles_route_orders": vehicles_route_orders,
+            "best_solution_distances": best_solution_distances,
+        }
+        return render(request, "index.html", context)
+
+    return "ok"

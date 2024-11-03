@@ -250,6 +250,7 @@ class GA_VRPTW:
 
         for experiment in range(self.experiments):
             for generation in range(self.num_generations):
+                print(f"solving experiment ke-{experiment} generasi ke-{generation}")
 
                 new_population_routes = []
                 new_population_distances = []
@@ -279,6 +280,15 @@ class GA_VRPTW:
                     new_population_routes,
                     new_population_distances,
                 )
+
+                for j  in range(len(new_population_routes)):
+                    chromosome_route = new_population_routes[j]
+                    for i in range(len(chromosome_route) - 1, -1, -1):
+                        curr_vehicle_route = chromosome_route[i]
+                        if len(curr_vehicle_route) == 2:
+                            chromosome_route.pop(i)
+                            new_population_distances[j].pop(i)
+
 
                 # elitism
                 (
@@ -475,6 +485,11 @@ class GA_VRPTW:
 
         return is_this_route_valid, chromosome_routes, chromosome_distances
 
+    def perform_mutation(self, pop_chromosome_routes, pop_chromosome_distances, i):
+        return self.mutation_chromosome(
+            pop_chromosome_routes[i], pop_chromosome_distances[i]
+        )
+
     def mutation(
         self,
         pop_results,
@@ -497,15 +512,31 @@ class GA_VRPTW:
         pop_chromosome_distances: List[int] -> [100, 200, 300] ->eta total rute setiap vehicle untuk setiap chromosome di populasi setelah mutasi
 
         """
-
+        num_threads = 500
         mutation_res = []
-        for i in range(0, self.population_size):
-            # mutasi setiap chromosome di dalam populasi
-            mutation_res.append(
-                self.mutation_chromosome(
-                    pop_chromosome_routes[i], pop_chromosome_distances[i]
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = [
+                executor.submit(
+                    self.perform_mutation,
+                    pop_chromosome_routes,
+                    pop_chromosome_distances,
+                    i,
                 )
-            )
+                for i in range(self.population_size)
+            ]
+
+            for future in concurrent.futures.as_completed(futures):
+                mutation_res.append(future.result())
+
+        # mutation_res = []
+        # for i in range(0, self.population_size):
+        #     # mutasi setiap chromosome di dalam populasi
+        #     mutation_res.append(
+        #         self.mutation_chromosome(
+        #             pop_chromosome_routes[i], pop_chromosome_distances[i]
+        #         )
+        #     )
 
         unzipped = zip(*mutation_res)
         results = list(unzipped)
@@ -580,7 +611,7 @@ class GA_VRPTW:
                     # jika jarak rute baru lebih pendek dari percobaan insert customer di posisi lain, maka kita update rute vehicle
                     updated_route = new_route
                     update_route_distance_eval = distance_eval
-                    updated_distance = curr_dist  # aneh
+                    updated_distance = curr_dist
 
         # return status insert, rute vehicle yang baru, jarak rute vehicle yang baru, jarak rute vehicle yang baru - jarak rute vehicle lama, setelah diinsert customer_to_insert
         return (
@@ -782,10 +813,8 @@ class GA_VRPTW:
         chromosome2_routes: List[List[int]] -> [[0, 1, 2, 3, 0], [0, 4, 5, 6, 0], [0, 7, 8, 9, 0]] -> rute-rute vehicle chromosome 2
         chromosome1_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle chromosome 1
         chromosome2_distances: List[int] -> [100, 200, 300] -> eta total rute setiap vehicle chromosome 2
-
-
-
         """
+
         parent_one = self.tournament_selection(
             population_results
         )  # pilih chromosome parent menggunakan tournament selection
@@ -800,18 +829,13 @@ class GA_VRPTW:
         parent_one_distances = copy.deepcopy(population_distances[parent_one])
         parent_two_distances = copy.deepcopy(population_distances[parent_two])
 
-        if len(parent_one_routes) <= 0:
-            print("parent_one_routes", parent_one_routes)
-            print("len parent_one_routes", len(parent_one_routes))
+      
         remove_route_one = parent_one_routes[
             random.randint(0, len(parent_one_routes) - 1)
         ][
             1:-1
         ]  # pilih satu rute vehicle dari parent one, customer-customer di rute ini akan dihapus di parent two dan diinsert ulang di parent two
-
-        if len(parent_two_routes) <= 0:
-            print("parent_two_routes", parent_two_routes)
-            print("len parent_two_routes", len(parent_two_routes))
+       
         remove_route_two = parent_two_routes[
             random.randint(0, len(parent_two_routes) - 1)
         ][
@@ -858,6 +882,15 @@ class GA_VRPTW:
             chromosome2_total_distance,
         )
 
+    def perform_recombination(
+        self, population_results, population_routes, population_distances
+    ):
+        return self.recombination(
+            population_results,
+            population_routes,
+            population_distances,
+        )
+
     def recombination_phase(
         self,
         population_results,
@@ -888,32 +921,65 @@ class GA_VRPTW:
 
 
         """
+        num_threads = 500
         recombination_size = int(self.population_size / 2)
         childrens_after_recombination = []
 
-        for i in range(recombination_size):
-            (
-                chrom_one_routes,
-                chrom_two_routes,
-                chrom_one_distances,
-                chrom_two_distances,
-                chrom_one_tot_distance,
-                chrom_two_tot_distance,
-            ) = self.recombination(
-                population_results,
-                population_routes,
-                population_distances,
-            )
-            childrens_after_recombination.append(
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = [
+                executor.submit(
+                    self.perform_recombination,
+                    population_results,
+                    population_routes,
+                    population_distances,
+                )
+                for _ in range(recombination_size)
+            ]
+
+            for future in concurrent.futures.as_completed(futures):
                 (
-                    chrom_one_routes,  # 150
-                    chrom_two_routes,  # 150
+                    chrom_one_routes,
+                    chrom_two_routes,
                     chrom_one_distances,
                     chrom_two_distances,
                     chrom_one_tot_distance,
                     chrom_two_tot_distance,
+                ) = future.result()
+
+                childrens_after_recombination.append(
+                    (
+                        chrom_one_routes,  # 150
+                        chrom_two_routes,  # 150
+                        chrom_one_distances,
+                        chrom_two_distances,
+                        chrom_one_tot_distance,
+                        chrom_two_tot_distance,
+                    )
                 )
-            )
+
+        # for i in range(recombination_size):
+        #     (
+        #         chrom_one_routes,
+        #         chrom_two_routes,
+        #         chrom_one_distances,
+        #         chrom_two_distances,
+        #         chrom_one_tot_distance,
+        #         chrom_two_tot_distance,
+        #     ) = self.recombination(
+        #         population_results,
+        #         population_routes,
+        #         population_distances,
+        #     )
+        #     childrens_after_recombination.append(
+        #         (
+        #             chrom_one_routes,  # 150
+        #             chrom_two_routes,  # 150
+        #             chrom_one_distances,
+        #             chrom_two_distances,
+        #             chrom_one_tot_distance,
+        #             chrom_two_tot_distance,
+        #         )
+        #     )
 
         for i in range(len(childrens_after_recombination)):
             res = childrens_after_recombination[i]
@@ -959,7 +1025,7 @@ def allowed_neigbors_search(
     curr_customer,
 ):
     """
-    cari customer yang bisa dikunjungi dengan memenuhi constraint vrptw
+    cari customer yang bisa dikunjungi  dari curr_customer dan memenuhi constraint vrptw
 
 
     Params
@@ -1007,28 +1073,30 @@ def allowed_neigbors_search(
 
         allowed_neigbors[i]["arrival_time"] = (
             allowed_neigbors[i]["distance_to_curr_customer"] + curr_time
-        )
+        )  # waktu tiba fleet ke customer
 
         allowed_neigbors[i]["waiting_time"] = (
             allowed_neigbors[i]["ready_time"] - allowed_neigbors[i]["arrival_time"]
-        )
+        )  # waktu tunggu fleet menunggu customer mengambil barang
+
         allowed_neigbors[i]["waiting_time"] = max(
             0, allowed_neigbors[i]["waiting_time"]
         )
 
         allowed_neigbors[i]["start_time"] = (
             allowed_neigbors[i]["arrival_time"] + allowed_neigbors[i]["waiting_time"]
-        )
+        )  # waktu disaat fleeet mulai melayani menyerahkan barang ke customer
 
         allowed_neigbors[i]["finish_time"] = (
             allowed_neigbors[i]["start_time"] + allowed_neigbors[i]["service_time"]
-        )
+        )  # finish time fleet melayani customer
 
         allowed_neigbors[i]["return_time"] = (
             distance_matrix[cust_index + 1][0] + allowed_neigbors[i]["finish_time"]
-        )
+        )  # waktu saat fleet tiba kembali ke tititk depot setelah melayani customer
 
     for i in range(len(allowed_neigbors) - 1, -1, -1):
+        # filter neighbor yang bisa dikunjungi
         neighbor = allowed_neigbors[i]
         if (
             neighbor["demand"] > fleet_capacity
@@ -1447,9 +1515,7 @@ def is_route_valid(route, distance_matrix, customers, fleet_total_time, fleet_ca
 
     # kunjungi customer selanjutnya
     # skip depot, buat kunjungi next customers setelah customer ke-1
-    for i in range(
-        1, len(route) - 1
-    ):  # next_customers exclude titik depot(0) & exclude last city sebelum depot
+    for i in range(1, len(route) - 2):  # coba kunjungi sampai  customer akhir
         # 1-2, 2-3, ....
         curr_time += distance_matrix[route[i]][
             route[i + 1]

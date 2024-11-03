@@ -205,6 +205,27 @@
             </form>
             <p style="margin-top: 10px; font-size: 20px">what's your eta?: <span id="eta"></span> menit</p>
 
+            <form action="{% url 'vrptw_from_csv' %}" method="POST" enctype="multipart/form-data" class="form-horizontal"> 
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="name" class="flex flex-col col-md-3 col-sm-3 col-xs-12 control-label">Fleets File: </label>
+                    <div class="col-md-8">
+                        <input type="file" name="fleets-file" id="fleets-file" required="True" class="form-control">
+                    </div>                    
+                </div>
+                <div class="form-group">
+                    <label for="name" class="col-md-3 col-sm-3 col-xs-12 control-label">Customers File: </label>
+                    <div class="col-md-8">
+                        <input type="file" name="customers-file" id="customers-file" required="True" class="form-control">
+                    </div>                    
+                </div>
+                <div class="form-group">                    
+                    <div class="col-md-3 col-sm-3 col-xs-12 col-md-offset-3" style="margin-bottom:10px;">
+                         <button class="btn btn-primary" type="submit"> <span class="glyphicon glyphicon-upload" style="margin-right:5px;"></span>Upload </button>
+                    </div> 
+                </div>
+            </form>
+
 
             <form method="POST" id="vptw-form" action="{% url 'home' %}" id="vrptw">
                 <h3>Vehicle Routing Problem With Time Windows</h3>
