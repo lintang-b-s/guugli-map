@@ -292,6 +292,8 @@
     <!-- </script> -->
         {{ customers|json_script:"customers" }}
           {{ vehicles_route_orders|json_script:"vehicles_route_orders" }}
+          {{ customers_service_time|json_script:"customers_service_time" }}
+          
     <script>
         var map = L.map("map").setView([-7.767185059226205, 110.37619471539949], 14)
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -331,21 +333,34 @@
         //     }
         // }
         const vehicles_route_orders = JSON.parse(document.getElementById('vehicles_route_orders').textContent);
+        const customers_service_time = JSON.parse(document.getElementById('customers_service_time').textContent);
+        
         for (let i=0; i < vehicles_route_orders.length; i++) {
             let vehicle = vehicles_route_orders[i];
             let order = 1;
-            for (customer of vehicle) {
-                if (customer ==0) {
+
+
+            for (let j=0; j < vehicle.length; j++) {
+                customer = vehicle[j]
+
+                if (customer == 0) {
                     continue;
                 }
-                console.log("customer:", customer)
+
+
+                curr_customer_time = customers_service_time[i][j]
+
+                curr_customer_data = customers[customer-1]
+
+                
                 var customerLatLng = customers[customer-1];
                 var customerLat = customerLatLng.lat;
                 var customerLon = customerLatLng.lon;
-                console.log("customerLatLng: ", customerLat);
+
                 if (customerLat) {
-                    var customerMarker = L.marker([customerLat, customerLon]).addTo(map).bindPopup("Customer: " + customer.name  + "Latitude: " + customerLat + "<br>" + "Longitude: " + customerLon + "<br>"
-                     + "Vehicle: " + i + "<br>" + "Order: " + order
+                    var customerMarker = L.marker([customerLat, customerLon]).addTo(map).bindPopup("Customer: " + curr_customer_data.id  + "Latitude: " + customerLat + "<br>" + "Longitude: " + customerLon + "<br>"
+                     + "Vehicle: " + i + "<br>" + "Order: " + order + "<br>" + "Arrival Time: " + curr_customer_time["arrival_time"]  + "<br>" + "Complete Time: " +  curr_customer_time["complete_time"]
+                     + "<br>" + "Ready Time: " + customers[customer-1]["ready_time"] + "<br>" + "Due Time: " + customers[customer-1]["due_time"]
                     ).openPopup();
                 }
                 order += 1;

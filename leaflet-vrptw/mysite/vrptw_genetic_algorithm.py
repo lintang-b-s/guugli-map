@@ -1,14 +1,13 @@
 import os
 import math
-import multiprocessing
 import random
 import pandas as pd
-import sys
 import concurrent.futures
 import threading
 import random
 import copy
 from .utils import argmin, argmax, nanargmin
+import datetime
 
 
 class GA_VRPTW:
@@ -101,6 +100,11 @@ class GA_VRPTW:
         self.fleet = {
             "fleet_total_time": fleet_total_time,
             "fleet_capacity": fleet_capacity,
+            "fleet_ready_time": df_fleets.loc[0, "ready_time"],
+            "fleet_due_time": df_fleets.loc[0, "ready_time"]
+            + datetime.timedelta(
+                seconds=df_fleets.loc[0, "fleet_max_working_time"] * 60
+            ),
         }
         self.service_time = self.customers[0]["service_time"]
 
@@ -190,7 +194,7 @@ class GA_VRPTW:
 
             self.population_distances.append(
                 population_distances
-            )  # eta total setiap chromosome [[100, 200, 300], [400, 500, 600], ...]
+            )  # eta total setiap chromosome [[100, 200, 300], [400, 200, 600], ...]
 
             df_initial_population_solution.to_csv(population_results_file, index=False)
 
@@ -228,7 +232,6 @@ class GA_VRPTW:
         setiap iterasi, lakukan recombination, mutation, elitism, dan update populasi
 
         solusi terbaik adalah solusi terbaik dari semua chromosome terbaik setiap eksperimen
-
 
         Returns
         ------
@@ -281,14 +284,13 @@ class GA_VRPTW:
                     new_population_distances,
                 )
 
-                for j  in range(len(new_population_routes)):
+                for j in range(len(new_population_routes)):
                     chromosome_route = new_population_routes[j]
                     for i in range(len(chromosome_route) - 1, -1, -1):
                         curr_vehicle_route = chromosome_route[i]
                         if len(curr_vehicle_route) == 2:
                             chromosome_route.pop(i)
                             new_population_distances[j].pop(i)
-
 
                 # elitism
                 (
@@ -361,8 +363,88 @@ class GA_VRPTW:
         best_solution_results = experiment_results[best_solution_idx]
         best_solution_routes = experiment_routes[best_solution_idx]
         best_solution_distances = experiment_distances[best_solution_idx]
+
+        # add waktu arrival setiap vehicle di setiap customers-nya
+        customers_service_time = []
+        for vehicle in best_solution_routes:
+
+            customers_service_time.append([])
+            start_time_vehicle = self.fleet["fleet_ready_time"]
+            customers_service_time[-1].append({
+                "depot": str(0),
+                "arrival_time": start_time_vehicle,
+                "due_time": self.fleet["fleet_due_time"]
+            })
+
+
+            customer = vehicle[0]
+            next_customer = vehicle[1]
+            eta_to_next_customer = self.distance_matrix[customer][next_customer]
+
+            ready_time = start_time_vehicle + datetime.timedelta(
+                seconds=self.customers[next_customer - 1]["ready_time"] * 60
+            )
+            curr_time = start_time_vehicle + datetime.timedelta(
+                minutes=eta_to_next_customer
+            )
+
+            wait_time = max(0, (ready_time - curr_time).total_seconds())
+            curr_time += datetime.timedelta(seconds=wait_time)
+            # arrival_time = max(
+            # start_time_vehicle
+            # + datetime.timedelta(
+            #     seconds=self.customers[next_customer - 1]["ready_time"] * 60
+            # ),
+            # start_time_vehicle + datetime.timedelta(minutes=eta_to_next_customer),
+            # )
+
+            customers_service_time[-1].append(
+                {
+                    "customer": str(next_customer),
+                    "arrival_time": curr_time,
+                    "complete_time": curr_time
+                    + datetime.timedelta(
+                        minutes=self.customers[next_customer - 1]["service_time"]
+                    ),
+                }
+            )  # add info arrival_time dan complete_time kurir di customer ke-1 setelah titik depot
+
+            for i in range(1, len(vehicle) - 1):
+                # untuk customer-2,customer-3, ......,
+                customer = vehicle[i]
+                next_customer = vehicle[i + 1]
+
+                eta_to_next_customer = self.distance_matrix[customer][next_customer]
+                prev_customer = customers_service_time[-1][-1]
+                ready_time = start_time_vehicle + datetime.timedelta(
+                    seconds=self.customers[next_customer - 1]["ready_time"] * 60
+                )
+
+                curr_time = prev_customer["complete_time"] + datetime.timedelta(
+                    minutes=eta_to_next_customer
+                )
+                wait_time = max(0, (ready_time - curr_time).total_seconds())
+                curr_time += datetime.timedelta(
+                    seconds=wait_time
+                )  # kalau harus nunggu / kurir lebih cepat sampai dibanding ready_time customer -> pakai waktu ready_time customer / kurir datang pas customer ready nerima barang
+                customers_service_time[-1].append(
+                    {
+                        "customer": str(next_customer),
+                        "arrival_time": curr_time,
+                        "complete_time": curr_time
+                        + datetime.timedelta(
+                            minutes=self.customers[next_customer - 1]["service_time"]
+                        ),
+                    }
+                )
+
         print("selesai solving vrptw")
-        return best_solution_results, best_solution_routes, best_solution_distances
+        return (
+            best_solution_results,
+            best_solution_routes,
+            best_solution_distances,
+            customers_service_time,
+        )
 
     def tournament_selection(self, population_results):
         """
@@ -512,7 +594,7 @@ class GA_VRPTW:
         pop_chromosome_distances: List[int] -> [100, 200, 300] ->eta total rute setiap vehicle untuk setiap chromosome di populasi setelah mutasi
 
         """
-        num_threads = 500
+        num_threads = 200
         mutation_res = []
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
@@ -528,15 +610,6 @@ class GA_VRPTW:
 
             for future in concurrent.futures.as_completed(futures):
                 mutation_res.append(future.result())
-
-        # mutation_res = []
-        # for i in range(0, self.population_size):
-        #     # mutasi setiap chromosome di dalam populasi
-        #     mutation_res.append(
-        #         self.mutation_chromosome(
-        #             pop_chromosome_routes[i], pop_chromosome_distances[i]
-        #         )
-        #     )
 
         unzipped = zip(*mutation_res)
         results = list(unzipped)
@@ -829,13 +902,12 @@ class GA_VRPTW:
         parent_one_distances = copy.deepcopy(population_distances[parent_one])
         parent_two_distances = copy.deepcopy(population_distances[parent_two])
 
-      
         remove_route_one = parent_one_routes[
             random.randint(0, len(parent_one_routes) - 1)
         ][
             1:-1
         ]  # pilih satu rute vehicle dari parent one, customer-customer di rute ini akan dihapus di parent two dan diinsert ulang di parent two
-       
+
         remove_route_two = parent_two_routes[
             random.randint(0, len(parent_two_routes) - 1)
         ][
@@ -921,7 +993,7 @@ class GA_VRPTW:
 
 
         """
-        num_threads = 500
+        num_threads = 200
         recombination_size = int(self.population_size / 2)
         childrens_after_recombination = []
 
@@ -956,30 +1028,6 @@ class GA_VRPTW:
                         chrom_two_tot_distance,
                     )
                 )
-
-        # for i in range(recombination_size):
-        #     (
-        #         chrom_one_routes,
-        #         chrom_two_routes,
-        #         chrom_one_distances,
-        #         chrom_two_distances,
-        #         chrom_one_tot_distance,
-        #         chrom_two_tot_distance,
-        #     ) = self.recombination(
-        #         population_results,
-        #         population_routes,
-        #         population_distances,
-        #     )
-        #     childrens_after_recombination.append(
-        #         (
-        #             chrom_one_routes,  # 150
-        #             chrom_two_routes,  # 150
-        #             chrom_one_distances,
-        #             chrom_two_distances,
-        #             chrom_one_tot_distance,
-        #             chrom_two_tot_distance,
-        #         )
-        #     )
 
         for i in range(len(childrens_after_recombination)):
             res = childrens_after_recombination[i]
@@ -1510,12 +1558,16 @@ def is_route_valid(route, distance_matrix, customers, fleet_total_time, fleet_ca
     curr_demand = customers[city_one_idx]["demand"]
     ready_time = customers[city_one_idx]["ready_time"]
     due_time = customers[city_one_idx]["due_time"]
+    service_time = customers[city_one_idx]["service_time"]
     curr_time = distance_matrix[route[0]][route[1]]
     curr_time_dist = distance_matrix[route[0]][route[1]]
 
+    wait_time = max(0, ready_time - curr_time)
+    curr_time += wait_time + service_time
+
     # kunjungi customer selanjutnya
     # skip depot, buat kunjungi next customers setelah customer ke-1
-    for i in range(1, len(route) - 2):  # coba kunjungi sampai  customer akhir
+    for i in range(1, len(route) - 2):  # coba kunjungi sampai sebelum customer akhir
         # 1-2, 2-3, ....
         curr_time += distance_matrix[route[i]][
             route[i + 1]
@@ -1544,6 +1596,7 @@ def is_route_valid(route, distance_matrix, customers, fleet_total_time, fleet_ca
                 0, ready_time - curr_time
             )  # waktu tunggu kurir =  waktu ready customer ke-i+1 - waktu kurir sampai di customer ke-i+1
             # kalau kurir sampai lebih terlambat dari ready_time berarti gak ada wait_time (wait_time = 0)
+            # waktu kurir menunnggu customer menerima barang, jika kurir datang sebelum ready_time
             if (
                 curr_time + wait_time + service_time
                 > fleet_total_time  # jika waktu kurir selesai melayani customer ke-i+1 melebihi jam pulang kurir -> rute tidak valid

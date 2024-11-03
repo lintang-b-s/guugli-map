@@ -2,9 +2,9 @@ from django.shortcuts import render, redirect
 from .vrptw_genetic_algorithm import GA_VRPTW
 from .utils import IdMap
 from datetime import datetime
-import time 
+import time
 import requests
-
+from datetime import timedelta
 
 def home(request):
     context = {}
@@ -27,10 +27,11 @@ def home(request):
         depot = {
             "fleet_lat": depot_lat,
             "fleet_lon": depot_lon,
-            "ready_time": 0,
+            "ready_time": depot_ready_time,
             "fleet_max_working_time": (
                 depot_due_time - depot_ready_time
-            ).total_seconds() / 60,
+            ).total_seconds()
+            / 60,
             "fleet_capacity": depot_capacity,
             "fleet_size": 25,
         }
@@ -64,8 +65,10 @@ def home(request):
                     "demand": customer_demand,
                     "ready_time": (
                         customer_ready_time - depot_ready_time
-                    ).total_seconds() / 60,
-                    "due_time": (customer_due_time - depot_ready_time).total_seconds() / 60,
+                    ).total_seconds()
+                    / 60,
+                    "due_time": (customer_due_time - depot_ready_time).total_seconds()
+                    / 60,
                     "service_time": customer_service_time,
                     "name": customer_name,
                 }
@@ -234,7 +237,7 @@ def vrptw_from_csv(request):
                 fleets["fleet_lat"] = float(fields[3])
                 fleets["fleet_max_working_time"] = float(fleet_max_working_time)
                 fleets["fleet_size"] = float(fields[0])
-                fleets["ready_time"] = 0
+                fleets["ready_time"] = fleet_ready_time
 
             i = 0
             for line in customer_lines:
@@ -260,7 +263,8 @@ def vrptw_from_csv(request):
                         "ready_time": customer_ready_time_from_depot,
                         "due_time": (
                             customer_due_time - fleet_ready_time
-                        ).total_seconds() / 60,
+                        ).total_seconds()
+                        / 60,
                         "service_time": float(fields[6]),
                         "name": str(i),
                     }
@@ -347,14 +351,16 @@ def vrptw_from_csv(request):
             distance_matrix=distance_matrix,
         )
 
-
-        best_solution_results, best_solution_routes, best_solution_distances = (
-            ga_population.solve()
-        )
+        (
+            best_solution_results,
+            best_solution_routes,
+            best_solution_distances,
+            customers_service_time,
+        ) = ga_population.solve()
         end_time = time.time()
         runtime = end_time - start_time
         print(f"lama waktu solve: {runtime/ 60}")
-        # aneh rute cuma 1 vehicle tapi distances nya lebih dari satu vehicle 
+        # aneh rute cuma 1 vehicle tapi distances nya lebih dari satu vehicle
 
         # best_solution_results =  {"num_vehicles": int, "total_distance": int, "fitness": float}
         vehicles_routes = []  # polyline untuk setiap vehicles
@@ -365,9 +371,8 @@ def vrptw_from_csv(request):
             vehicles_route_orders.append(curr_vehicle_route)
 
             curr_navigation = []  # polyline untuk vehicle ke-i
-            for j in range(len(curr_vehicle_route)):
-                if j == 0:
-                    continue
+            for j in range(1, len(curr_vehicle_route)):
+               
                 # navigasi dari customer ke-j-1 ke customer ke-j
                 polyline = navigations_matrix[curr_vehicle_route[j - 1]][
                     curr_vehicle_route[j]
@@ -376,6 +381,19 @@ def vrptw_from_csv(request):
 
             vehicles_routes.append(curr_navigation)
         depot_lat_lng = f"{fleets['fleet_lat']}, {fleets['fleet_lon']}"
+
+        # ubah date customer lagi...
+        for i in range(len(customers)): 
+            customers[i]["ready_time"] = fleet_ready_time  + timedelta(
+                        seconds=customers[i]["ready_time"]*60
+                    )
+            customers[i]["due_time"] = fleet_ready_time  + timedelta(
+                        seconds=customers[i]["due_time"]*60
+                    )
+
+
+            
+
         context = {
             "depot_name": "depot",
             "depot_lat_lng": depot_lat_lng,
@@ -388,6 +406,7 @@ def vrptw_from_csv(request):
             "vehicles_routes": vehicles_routes,
             "vehicles_route_orders": vehicles_route_orders,
             "best_solution_distances": best_solution_distances,
+            "customers_service_time": customers_service_time,
         }
         return render(request, "index.html", context)
 
