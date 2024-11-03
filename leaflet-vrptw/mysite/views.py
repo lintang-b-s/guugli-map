@@ -5,6 +5,8 @@ from datetime import datetime
 import time
 import requests
 from datetime import timedelta
+from django.http.response import JsonResponse
+
 
 def home(request):
     context = {}
@@ -149,9 +151,12 @@ def home(request):
             fleets_input=[depot],
             distance_matrix=distance_matrix,
         )
-        best_solution_results, best_solution_routes, best_solution_distances = (
-            ga_population.solve()
-        )
+        (
+            best_solution_results,
+            best_solution_routes,
+            best_solution_distances,
+            customers_service_time,
+        ) = ga_population.solve()
 
         # best_solution_results =  {"num_vehicles": int, "total_distance": int, "fitness": float}
         vehicles_routes = []  # polyline untuk setiap vehicles
@@ -185,6 +190,7 @@ def home(request):
             "vehicles_routes": vehicles_routes,
             "vehicles_route_orders": vehicles_route_orders,
             "best_solution_distances": best_solution_distances,
+            "customers_service_time": customers_service_time,
         }
         return render(request, "index.html", context)
     return render(request, "index.html", context)
@@ -372,7 +378,7 @@ def vrptw_from_csv(request):
 
             curr_navigation = []  # polyline untuk vehicle ke-i
             for j in range(1, len(curr_vehicle_route)):
-               
+
                 # navigasi dari customer ke-j-1 ke customer ke-j
                 polyline = navigations_matrix[curr_vehicle_route[j - 1]][
                     curr_vehicle_route[j]
@@ -383,16 +389,13 @@ def vrptw_from_csv(request):
         depot_lat_lng = f"{fleets['fleet_lat']}, {fleets['fleet_lon']}"
 
         # ubah date customer lagi...
-        for i in range(len(customers)): 
-            customers[i]["ready_time"] = fleet_ready_time  + timedelta(
-                        seconds=customers[i]["ready_time"]*60
-                    )
-            customers[i]["due_time"] = fleet_ready_time  + timedelta(
-                        seconds=customers[i]["due_time"]*60
-                    )
-
-
-            
+        for i in range(len(customers)):
+            customers[i]["ready_time"] = fleet_ready_time + timedelta(
+                seconds=customers[i]["ready_time"] * 60
+            )
+            customers[i]["due_time"] = fleet_ready_time + timedelta(
+                seconds=customers[i]["due_time"] * 60
+            )
 
         context = {
             "depot_name": "depot",
@@ -408,6 +411,7 @@ def vrptw_from_csv(request):
             "best_solution_distances": best_solution_distances,
             "customers_service_time": customers_service_time,
         }
-        return render(request, "index.html", context)
+        # return render(request, "index.html", context)
+        return JsonResponse(context)
 
     return "ok"

@@ -68,11 +68,7 @@
             margin-bottom: 20px;
             background-color: #f0f0f0;
         }
-/*         
-        .depot-time {
-            display: flex;
-            justify-content: space-between;
-        } */
+
 
         .depot-time, .depot-capacity {
             display: flex;
@@ -126,30 +122,30 @@
                 <h4>Depot Information</h4>
                 <div class="info-item">
                     <strong>Depot Name:</strong>
-                    <p>{{ depot_name }}</p>
+                    <p id="depot_name" >{{depot_name}}</p>
                 </div>
                 <div class="info-item">
                     <strong>Latitude, Longitude:</strong>
-                    <p>{{ depot_lat_lng }}</p>
+                    <p id="depot_lat_lng">{{depot_lat_lng}}</p>
                 </div>
                 <div class="info-item depot-time">
                     <div>
                         <strong>Ready Time:</strong>
-                        <p>{{ depot_ready_time }}</p>
+                        <p id="depot_ready_time">{{depot_ready_time}}</p>
                     </div>
                     <div>
                         <strong>Due Time:</strong>
-                        <p>{{ depot_due_time }}</p>
+                        <p id="depot_due_time">{{depot_due_time}}</p>
                     </div>
                 </div>
                 <div class="info-item depot-capacity">
                     <div>
                         <strong>Depot Capacity:</strong>
-                        <p>{{ depot_capacity }}</p>
+                        <p id="depot_capacity">{{depot_capacity}}</p>
                     </div>
                     <div>
                         <strong>Number of Customers:</strong>
-                        <p>{{ number_of_customers }}</p>
+                        <p id="number_of_customers_output">{{number_of_customers}}</p>
                     </div>
                 </div>
             </div>
@@ -157,7 +153,7 @@
             <!-- Customer Information -->
             <div class="info-section">
                 <h4>Customer Information</h4>
-                <div class="info-item customers-list">
+                <div class="info-item customers-list" id="customers-list">
                     {% for customer in customers %}
                         <p><strong>Customer {{ forloop.counter }}:</strong> {{ customer }}</p>
                     {% endfor %}
@@ -169,11 +165,11 @@
                 <h4>Solution Results</h4>
                 <div class="info-item">
                     <strong>Best Solution Results:</strong>
-                    <p>{{ best_solution_results }}</p>
+                    <div id="best_solution_results">{{best_solution_results}}</div>
                 </div>
                 <div class="info-item">
                     <strong>Best Solution Distances:</strong>
-                    <p>{{ best_solution_distances }}</p>
+                    <p id="best_solution_distances">{{best_solution_distances}}</p>
                 </div>
             </div>
 
@@ -205,7 +201,8 @@
             </form>
             <p style="margin-top: 10px; font-size: 20px">what's your eta?: <span id="eta"></span> menit</p>
 
-            <form action="{% url 'vrptw_from_csv' %}" method="POST" enctype="multipart/form-data" class="form-horizontal"> 
+            <!-- action="{% url 'vrptw_from_csv' %}" -->
+            <form action="#"  method="POST" enctype="multipart/form-data" id="vrptw-csv-form" class="form-horizontal"> 
                 {% csrf_token %}
                 <div class="form-group">
                     <label for="name" class="flex flex-col col-md-3 col-sm-3 col-xs-12 control-label">Fleets File: </label>
@@ -216,12 +213,12 @@
                 <div class="form-group">
                     <label for="name" class="col-md-3 col-sm-3 col-xs-12 control-label">Customers File: </label>
                     <div class="col-md-8">
-                        <input type="file" name="customers-file" id="customers-file" required="True" class="form-control">
+                        <input type="file" name="customers-file" id="customers-file" required="True"   class="form-control">
                     </div>                    
                 </div>
                 <div class="form-group">                    
                     <div class="col-md-3 col-sm-3 col-xs-12 col-md-offset-3" style="margin-bottom:10px;">
-                         <button class="btn btn-primary" type="submit"> <span class="glyphicon glyphicon-upload" style="margin-right:5px;"></span>Upload </button>
+                         <button class="btn btn-primary" type="submit"> Upload </button>
                     </div> 
                 </div>
             </form>
@@ -287,9 +284,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@mapbox/polyline@1.2.1/src/polyline.min.js"></script>
 
-    <!-- <script type="application/json" id="vehicles_routes"> -->
         {{ vehicles_routes|json_script:"vehicles_routes" }}
-    <!-- </script> -->
         {{ customers|json_script:"customers" }}
           {{ vehicles_route_orders|json_script:"vehicles_route_orders" }}
           {{ customers_service_time|json_script:"customers_service_time" }}
@@ -315,23 +310,13 @@
             depotLatLng = depotLatLng.split(",");
             var depotMarker = L.marker([depotLatLng[0], depotLatLng[1]]).addTo(map).bindPopup("Depot: {{ depot_name }}").openPopup();
         }
-        var colors = ["#FF5733", "#33FF57", "#3357FF", "#FF33A1", "#A133FF", "#FFC733", "#33FFF5"];
-        var colorIndex = 0;
 
-        // add marker semua customer
+        var colors = ["#FF5733", "#33FF57", "#3357FF", "#FF33A1", "#A133FF", "#FFC733", "#33FFF5", "#10375C", "#37AFE1", "#3A6D8C"];
+        var colorIndex = 0;
 
 
         const customers = JSON.parse(document.getElementById('customers').textContent);
-        // console.log("customers: ", customers);
-        // for (customer of customers) {
-        //     var customerLat = customer.lat;
-        //     var customerLon = customer.lon;
-        //     console.log("customerLatLng: ", customerLat);
-        //     if (customerLat) {
-        //         var customerMarker = L.marker([customerLat, customerLon]).addTo(map).bindPopup("Customer: " + customer.name  + "Latitude: " + customerLat + "<br>" + "Longitude: " + customerLon + "<br>"
-        //         ).openPopup();
-        //     }
-        // }
+     
         const vehicles_route_orders = JSON.parse(document.getElementById('vehicles_route_orders').textContent);
         const customers_service_time = JSON.parse(document.getElementById('customers_service_time').textContent);
         
@@ -395,8 +380,10 @@
         }
           
 
-        document.getElementById('set-customers-btn').addEventListener('click', function() {
+          
 
+        document.getElementById('set-customers-btn').addEventListener('click', function() {
+            console.log("clickeeddd!!!!!!")
             var numberOfCustomers = document.getElementById('number_of_customers').value;
 
 
@@ -515,6 +502,153 @@
             }
         });
 
+
+        // vrptw pakai file csv
+        document.getElementById('vrptw-csv-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData();
+            var fleetsFile = document.getElementById('fleets-file').files[0];
+            var customersFile = document.getElementById('customers-file').files[0];
+
+            formData.append('fleets-file', fleetsFile)
+            formData.append('customers-file', customersFile)
+
+
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        // Does this cookie string begin with the name we want?
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+            const csrftoken = getCookie('csrftoken');
+            
+            $.ajax({url: "http://localhost:8000/csv/", 
+                method: 'POST',
+                contentType: "application/json",
+                data: formData,
+                processData: false,
+                headers: {
+                    'X-CSRFToken': csrftoken
+                },
+                contentType: false,
+                success:  function(response) {
+                    
+                    var vehicles_routes = response.vehicles_routes;
+                    var vehicles_route_orders = response.vehicles_route_orders;
+                    var customers_service_time = response.customers_service_time;
+                    var customers = response.customers;
+
+
+                    for (vehicle_route of vehicles_routes ) {
+                        var vehicleRoute = vehicle_route;
+                        // console.log("vehicleRoute: ", vehicleRoute);
+                        var polylineCoordinates = [];
+                        for (var i = 0; i < vehicleRoute.length; i++) {
+                            var polylineString = vehicleRoute[i];
+                            // console.log("polylineString: ", polylineString);
+                            var polylineCoordinate = polyline.decode(polylineString);
+                            // console.log("polylineCoordinate: ", polylineCoordinate);
+                            polylineCoordinates.push(...polylineCoordinate);
+                        }
+                        // console.log("polylineCoordinates: ", polylineCoordinates);
+
+                        polylineLayerVRP = L.polyline(polylineCoordinates, {
+                            color: colors[colorIndex % colors.length],
+                        
+                        }).addTo(map);
+
+                        map.fitBounds(polylineLayerVRP.getBounds());
+
+                        colorIndex++;
+                    }
+
+
+                    
+
+                    for (let i=0; i < vehicles_route_orders.length; i++) {
+                        let vehicle = vehicles_route_orders[i];
+                        let order = 1;
+
+
+                        for (let j=0; j < vehicle.length; j++) {
+                            customer = vehicle[j]
+
+                            if (customer == 0) {
+                                continue;
+                            }
+
+
+                            curr_customer_time = customers_service_time[i][j]
+
+                            curr_customer_data = customers[customer-1]
+
+                                
+                                var customerLatLng = customers[customer-1];
+                                var customerLat = customerLatLng.lat;
+                                var customerLon = customerLatLng.lon;
+
+                                if (customerLat) {
+                                    var customerMarker = L.marker([customerLat, customerLon]).addTo(map).bindPopup("Customer: " + curr_customer_data.id  + "<br>" + "Latitude: " + customerLat + "<br>" + "Longitude: " + customerLon + "<br>"
+                                    + "Vehicle: " + i + "<br>" + "Order: " + order + "<br>" + "Arrival Time: " + curr_customer_time["arrival_time"]  + "<br>" + "Complete Time: " +  curr_customer_time["complete_time"]
+                                    + "<br>" + "Ready Time: " + customers[customer-1]["ready_time"] + "<br>" + "Due Time: " + customers[customer-1]["due_time"]
+                                    ).openPopup();
+                                }
+                                order += 1;
+                            }
+                    }
+
+
+                    document.getElementById('depot_name').innerText = response.depot_name;
+                    document.getElementById('depot_lat_lng').innerText = response.depot_lat_lng;
+                    document.getElementById('depot_ready_time').innerText = response.depot_ready_time;
+                    document.getElementById('depot_due_time').innerText = response.depot_due_time;
+                    document.getElementById('depot_capacity').innerText = response.depot_capacity;
+                    document.getElementById('number_of_customers_output').innerText = response.number_of_customers;
+
+                    document.getElementById('best_solution_distances').innerText = response.best_solution_distances;
+                    var results = document.getElementById('best_solution_results');
+                    results.innerHTML = '';
+
+                    for (const [key, value] of Object.entries(response.best_solution_results)) {
+                        const newP = document.createElement('p');
+
+                        newP.textContent = `${key}: ${value} `;
+                        results.appendChild(newP);
+                    }
+
+
+                    //  customers
+
+                    var customers = response.customers;
+                    var custContainer = document.getElementById('customers-list');
+                    for(customer of customers) {
+                       
+                        const newP = document.createElement('p');
+                        newP.textContent = ` id: ${customer.id} ,  lat: ${customer.lat} , lon: ${customer.lon}
+                        , demand: ${customer.demand}, ready_time: ${customer.ready_time}, due_time: ${customer.due_time}, 
+                        service_time: ${customer.service_time}, name: ${customer.name}`;
+                        
+                        custContainer.appendChild(newP)
+                    }
+                    
+                },
+                error: function(xhr, status, error) {
+                    alert("Gagal upload file");
+                    console.error(status, error);
+                }
+        })
+
+        })
+
         // Shortest Path
         var polylineLayer;
 
@@ -581,14 +715,29 @@
         var destinationMarker = null;
 
         var currentMarker = null;
+        let activeInputField = null ;
 
         let activeCustomerLatLng = null;
         document.getElementById('customer-forms').addEventListener('focusin', function(event) {
-            if (event.target && event.target.name.includes('customer_') && event.target.name.includes('_lat_lng')) {
+            if (event.target && event.target.name.includes('customer_') && event.target.name.includes('_lat_lng') ) {
                     activeInputField = event.target; 
             }
         });
 
+        document.getElementById('shortest-path-form').addEventListener('focusin', function(event) {
+            if (event.target &&  event.target.name.includes('_lat_lng')) {
+                    activeInputField = event.target; 
+            }
+        });
+
+        document.getElementById('vptw-form').addEventListener('focusin', function(event) {
+            if (event.target &&  event.target.name.includes('_lat_lng')) {
+                    activeInputField = event.target; 
+            }
+        });
+
+
+        // vptw-form
 
         function onMapClick(e) {
             if (polylineLayer) {
