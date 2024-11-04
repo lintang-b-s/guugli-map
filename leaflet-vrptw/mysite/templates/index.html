@@ -122,7 +122,7 @@
                 <h4>Depot Information</h4>
                 <div class="info-item">
                     <strong>Depot Name:</strong>
-                    <p id="depot_name" >{{depot_name}}</p>
+                    <p id="depot_name">{{depot_name}}</p>
                 </div>
                 <div class="info-item">
                     <strong>Latitude, Longitude:</strong>
@@ -202,6 +202,7 @@
             <p style="margin-top: 10px; font-size: 20px">what's your eta?: <span id="eta"></span> menit</p>
 
             <!-- action="{% url 'vrptw_from_csv' %}" -->
+            <h3 class=" mt-4">Vehicle Routing Problem With Time Windows</h3>
             <form action="#"  method="POST" enctype="multipart/form-data" id="vrptw-csv-form" class="form-horizontal"> 
                 {% csrf_token %}
                 <div class="form-group">
@@ -218,14 +219,13 @@
                 </div>
                 <div class="form-group">                    
                     <div class="col-md-3 col-sm-3 col-xs-12 col-md-offset-3" style="margin-bottom:10px;">
-                         <button class="btn btn-primary" type="submit"> Upload </button>
+                         <button class="btn btn-primary" type="submit" id="upload-btn"> Upload and Solve</button>
                     </div> 
                 </div>
             </form>
 
 
             <form method="POST" id="vptw-form" action="{% url 'home' %}" id="vrptw">
-                <h3>Vehicle Routing Problem With Time Windows</h3>
                 {% csrf_token %}
 
                 <div class="form-group" style="margin-top: 20px">
@@ -270,7 +270,7 @@
             
 
                 <!-- Submit Button -->
-                <button class="btn btn-primary my-2 my-sm-0" type="submit">Solve VRPTW</button>
+                <button class="btn btn-primary my-2 my-sm-0" id="vrptw-input-button" type="submit">Solve VRPTW</button>
             </form>
         </div>
     </div>
@@ -503,12 +503,37 @@
         });
 
 
+        function showLoadingButton(button) {
+            button.disabled = true;
+            button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>Loading...`;
+        }
+
+        function hideLoadingButton(button, originalText) {
+            button.disabled = false;
+            button.innerHTML = originalText;
+        }
+
+
+        // document.getElementById('vrptw-input-button').addEventListener('click', async function(event) {
+        //     var vrptwButton = this;
+        //     showLoadingButton(vrptwButton);
+
+        //     setTimeout(() => {
+        //         hideLoadingButton(vrptwButton, 'Solve VRPTW');
+        //         }, 30*1000);
+        // });
+
+
+
         // vrptw pakai file csv
         document.getElementById('vrptw-csv-form').addEventListener('submit', function(event) {
             event.preventDefault();
             const formData = new FormData();
             var fleetsFile = document.getElementById('fleets-file').files[0];
             var customersFile = document.getElementById('customers-file').files[0];
+            
+            var uploadButton = document.getElementById('upload-btn');
+            showLoadingButton(uploadButton);
 
             formData.append('fleets-file', fleetsFile)
             formData.append('customers-file', customersFile)
@@ -640,6 +665,7 @@
                         custContainer.appendChild(newP)
                     }
                     
+                    hideLoadingButton(uploadButton, 'Upload and Solve');
                 },
                 error: function(xhr, status, error) {
                     alert("Gagal upload file");

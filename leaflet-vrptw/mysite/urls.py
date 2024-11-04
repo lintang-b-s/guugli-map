@@ -26,4 +26,5 @@ urlpatterns = [
     # path('', TemplateView.as_view(template_name='index.html'), name="home"),
     path("home/", map_views.home, name="home"),
     path("csv/", map_views.vrptw_from_csv, name="vrptw_from_csv"),
+    path("tuning/", map_views.hyperparameter_tuning, name="hyperparameter_tuning"),
 ]

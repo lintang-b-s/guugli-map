@@ -3,5 +3,14 @@ solomon_benchmark/R1/experiments/
 leaflet-vrptw/*.sqlite3
 leaflet-vrptw/mysite/__pycache__/
 
-result/
+result/population/*.csv
 
+
+result/tuning/*.csv
+result/tuning/*.png
+./*.csv
+*.png
+
+.ipynb_checkpoints/
+
+result_tuning.ipynb

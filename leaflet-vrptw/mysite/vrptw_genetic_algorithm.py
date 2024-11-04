@@ -21,7 +21,7 @@ class GA_VRPTW:
         tournament_size=4,
         tournament_threshold=0.8,
         crossover_prob=0.7,
-        mutation_prob=0.1,
+        mutation_prob=0,
         alpha=100,
         beta=0.001,
     ):
@@ -36,7 +36,11 @@ class GA_VRPTW:
         self.population_distances = []
         self.population_results = []
         self.crossover_prob = crossover_prob
-        self.mutation_prob = 1 / population_size
+        if mutation_prob == 0:
+            self.mutation_prob = 1 / population_size
+        else:
+            self.mutation_prob = mutation_prob
+        
 
         self.alpha = alpha
         self.beta = beta
@@ -244,6 +248,7 @@ class GA_VRPTW:
         best_solution_results = {}  # buat nyimpen solusi terbaik dari semua eksperiment
         best_solution_routes = []
         best_solution_distances = []
+        
 
         experiment_results = (
             []
@@ -251,6 +256,13 @@ class GA_VRPTW:
         experiment_routes = []
         experiment_distances = []
 
+        best_chromosome_fitnesses = []
+
+        prev_population_fitnesses = []
+        for chromsome in self.population_results[0]:
+            prev_population_fitnesses.append(chromsome["fitness"])
+        best_chromosome_fitnesses.append(min(prev_population_fitnesses))
+        
         for experiment in range(self.experiments):
             for generation in range(self.num_generations):
                 print(f"solving experiment ke-{experiment} generasi ke-{generation}")
@@ -314,6 +326,9 @@ class GA_VRPTW:
                     elite_chromosome_distances
                 )
                 new_population_results[worst_chromosome_idx] = elite_chromosome_results
+
+                # simpan best chromosome fitness buat plotting grafik
+                best_chromosome_fitnesses.append(elite_chromosome_results["fitness"])
 
                 # update populasi
                 self.population_routes[experiment] = copy.deepcopy(
@@ -444,6 +459,7 @@ class GA_VRPTW:
             best_solution_routes,
             best_solution_distances,
             customers_service_time,
+            best_chromosome_fitnesses
         )
 
     def tournament_selection(self, population_results):
@@ -1567,7 +1583,7 @@ def is_route_valid(route, distance_matrix, customers, fleet_total_time, fleet_ca
 
     # kunjungi customer selanjutnya
     # skip depot, buat kunjungi next customers setelah customer ke-1
-    for i in range(1, len(route) - 2):  # coba kunjungi sampai sebelum customer akhir
+    for i in range(1, len(route) - 2):  # coba kunjungi sampai customer akhir sebelum depot
         # 1-2, 2-3, ....
         curr_time += distance_matrix[route[i]][
             route[i + 1]
