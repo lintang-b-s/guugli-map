@@ -12,6 +12,7 @@ import itertools
 import pandas as pd
 
 
+
 def home(request):
     context = {}
     date_format = "%Y-%m-%dT%H:%M"
@@ -431,7 +432,7 @@ def vrptw_from_csv(request):
         }
         return JsonResponse(context)
 
-    return "ok"
+    return JsonResponse({"message": "ok"})
 
 
 def hyperparameter_tuning(request):

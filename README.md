@@ -16,3 +16,8 @@ simple google map clone. Vehicle Routing Problem With Time Windows Solver (using
 
 Note: Try to make sure the location where the query is carried out is close to a road, so that road snapping works.
 ```
+
+## Hasil parameter tuning
+```
+https://drive.google.com/drive/folders/1J6QutrRxUFfsqJMZiO0kMgfk7khSrC6z?usp=sharing
+```
