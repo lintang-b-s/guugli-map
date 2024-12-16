@@ -12,7 +12,6 @@ import itertools
 import pandas as pd
 
 
-
 def home(request):
     context = {}
     date_format = "%Y-%m-%dT%H:%M"
